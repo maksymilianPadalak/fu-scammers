@@ -1,7 +1,7 @@
 import type { Request, Response } from 'express';
 import { processVideoUpload } from '../services/video';
-import { extractFirstFrameAndAnalyze } from '../services/frameAnalysis';
-import { parseAIDetectionOutput, type AIDetection } from '../types/ai';
+import { extractAndAnalyze } from '../services/frameAnalysis';
+import { parseAIDetectionOutput } from '../types/ai';
 import fs from 'fs';
 
 interface VideoUploadRequest extends Request {
@@ -25,7 +25,8 @@ export const uploadVideo = async (req: VideoUploadRequest, res: Response) => {
     if (!req.file) {
       return res.status(400).json({
         success: false,
-        error: 'No video file provided. Make sure to include a file with the key "video" in your form data.',
+        error:
+          'No video file provided. Make sure to include a file with the key "video" in your form data.',
       });
     }
 
@@ -34,7 +35,7 @@ export const uploadVideo = async (req: VideoUploadRequest, res: Response) => {
     // Step 1: Process and validate the video upload
     console.log('🎬 Processing video upload...');
     const uploadResult = await processVideoUpload(req.file, additionalInfo);
-    
+
     if (!uploadResult.success) {
       return res.status(400).json({
         success: false,
@@ -44,7 +45,7 @@ export const uploadVideo = async (req: VideoUploadRequest, res: Response) => {
 
     // Step 2: Extract first frame and analyze for AI-generated content
     console.log('🔍 Starting AI-generated content detection...');
-    const frameAnalysis = await extractFirstFrameAndAnalyze(req.file.path);
+    const frameAnalysis = await extractAndAnalyze(req.file.path);
 
     if (!frameAnalysis.success || !frameAnalysis.analysis) {
       return res.status(502).json({
@@ -87,11 +88,16 @@ const logRequestDetails = (req: VideoUploadRequest): void => {
   console.log('Method:', req.method);
   console.log('Content-Type:', req.headers['content-type']);
   console.log('Body:', req.body);
-  console.log('File:', req.file ? {
-    name: req.file.originalname,
-    type: req.file.mimetype,
-    size: `${(req.file.size / 1024 / 1024).toFixed(2)} MB`,
-  } : 'No file uploaded');
+  console.log(
+    'File:',
+    req.file
+      ? {
+          name: req.file.originalname,
+          type: req.file.mimetype,
+          size: `${(req.file.size / 1024 / 1024).toFixed(2)} MB`,
+        }
+      : 'No file uploaded'
+  );
   console.log('============================\n');
 };
 
@@ -119,8 +125,12 @@ const buildSuccessResponse = (
         parsed: parsedAnalysis.data,
         parseError: parsedAnalysis.error,
         // Backward compatibility fields
-        frames: Array.isArray(parsedAnalysis.data) ? parsedAnalysis.data : undefined,
-        summary: !Array.isArray(parsedAnalysis.data) ? parsedAnalysis.data : undefined,
+        frames: Array.isArray(parsedAnalysis.data)
+          ? parsedAnalysis.data
+          : undefined,
+        summary: !Array.isArray(parsedAnalysis.data)
+          ? parsedAnalysis.data
+          : undefined,
       },
     },
   };

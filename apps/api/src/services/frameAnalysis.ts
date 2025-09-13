@@ -1,6 +1,7 @@
 import fs from 'fs';
 import path from 'path';
 import { extractFrames } from '../utils/frameExtraction';
+import { extractAudio } from '../utils/audioExtraction';
 import { analyzeFrameWithOpenAI } from '../utils/aiAnalysis';
 
 export interface FrameAnalysisResult {
@@ -12,12 +13,21 @@ export interface FrameAnalysisResult {
 }
 
 // Analyze only the first extracted frame (keep a single OpenAI request)
-export const extractFirstFrameAndAnalyze = async (
+export const extractAndAnalyze = async (
   videoPath: string,
   outputDir: string = path.dirname(videoPath)
 ): Promise<FrameAnalysisResult> => {
   const { frames, folder } = await extractFrames(videoPath, {
     fps: 10,
+    outputDir,
+  });
+
+  // Extract audio from the video
+  const { audioPath, folder: audioFolder } = await extractAudio(videoPath, {
+    duration: 30, // Extract first 30 seconds
+    format: 'wav', // WAV format
+    sampleRate: 16000, // 16kHz good for speech
+    channels: 1, // Mono
     outputDir,
   });
 
@@ -42,8 +52,9 @@ export const extractFirstFrameAndAnalyze = async (
           : 'Unknown error during frame analysis',
     };
   } finally {
-    // Always cleanup temp frames folder
+    // Always cleanup temp frames and audio folders
     safeRemoveFolder(folder);
+    // safeRemoveFolder(audioFolder);
   }
 };
 
