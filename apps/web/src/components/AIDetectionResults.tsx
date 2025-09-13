@@ -5,7 +5,7 @@ import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Progress } from '@/components/ui/progress';
 import { AlertTriangle, Eye, Shield, Zap } from 'lucide-react';
 
-interface AIDetectionSummary {
+export interface AIDetectionSummary {
   aiGeneratedLikelihood: number;
   artifactsDetected: string[];
   rationale: string[];
@@ -18,12 +18,6 @@ interface AIDetectionResultsProps {
   className?: string;
 }
 
-interface ThreatLevel {
-  level: 'HIGH' | 'MEDIUM' | 'LOW';
-  color: 'destructive' | 'warning' | 'default';
-  bgColor: string;
-}
-
 export const AIDetectionResults: React.FC<AIDetectionResultsProps> = ({
   data,
   className = '',
@@ -31,7 +25,7 @@ export const AIDetectionResults: React.FC<AIDetectionResultsProps> = ({
   const likelihood = Math.round(data.aiGeneratedLikelihood * 100);
 
   // Determine threat level and styling
-  const getThreatLevel = (likelihood: number): ThreatLevel => {
+  const getThreatLevel = (likelihood: number) => {
     if (likelihood >= 80)
       return { level: 'HIGH', color: 'destructive', bgColor: 'bg-red-950' };
     if (likelihood >= 50)
