@@ -1,11 +1,11 @@
 import fs from 'fs';
 import OpenAI from 'openai';
+// Hardcoded model configuration
+import { FORENSIC_SYSTEM_PROMPT } from './prompts';
 
 // Initialize OpenAI client once per process
 const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 
-// Hardcoded model configuration
-import { FORENSIC_SYSTEM_PROMPT } from './prompts';
 const IMAGE_DETAIL = 'high' as const;
 
 /**
@@ -14,7 +14,8 @@ const IMAGE_DETAIL = 'high' as const;
  * multiple input_image items in one request.
  */
 export async function analyzeFrameWithOpenAI(
-  framePathOrPaths: string | string[]
+  framePathOrPaths: string | string[],
+  audioPath: string
 ): Promise<string> {
   const paths = Array.isArray(framePathOrPaths)
     ? framePathOrPaths
@@ -34,16 +35,36 @@ export async function analyzeFrameWithOpenAI(
     };
   });
 
+  // Validate and build audio content
+  if (!fs.existsSync(audioPath))
+    throw new Error(`Audio file does not exist: ${audioPath}`);
+  const audioStat = fs.statSync(audioPath);
+  if (audioStat.size === 0)
+    throw new Error(`Audio file is empty: ${audioPath}`);
+
+  const audioResponse = await openai.audio.transcriptions.create({
+    model: 'gpt-4o-transcribe',
+    response_format: 'json',
+    include: ['logprobs'],
+    file: fs.createReadStream(audioPath),
+  });
+
   const resp = await openai.responses.create({
     model: 'gpt-5',
     input: [
       {
         role: 'system',
-        content: [{ type: 'input_text' as const, text: FORENSIC_SYSTEM_PROMPT }],
+        content: [
+          { type: 'input_text' as const, text: FORENSIC_SYSTEM_PROMPT },
+        ],
       },
+
       {
         role: 'user',
-        content: imagesContent,
+        content: [
+          ...imagesContent,
+          { type: 'input_text', text: 'Transcription: ' + audioResponse.text },
+        ],
       },
     ],
   });

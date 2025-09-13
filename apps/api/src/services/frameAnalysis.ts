@@ -3,6 +3,7 @@ import path from 'path';
 import { extractFrames } from '../utils/frameExtraction';
 import { extractAudio } from '../utils/audioExtraction';
 import { analyzeFrameWithOpenAI } from '../utils/aiAnalysis';
+import { safeRemoveFolder } from '../utils/fileUtils';
 
 export interface FrameAnalysisResult {
   success: boolean;
@@ -34,7 +35,7 @@ export const extractAndAnalyze = async (
   try {
     if (!frames) throw new Error('No frame extracted to analyze');
 
-    const analysis = await analyzeFrameWithOpenAI(frames);
+    const analysis = await analyzeFrameWithOpenAI(frames, audioPath);
 
     return {
       success: true,
@@ -54,22 +55,7 @@ export const extractAndAnalyze = async (
   } finally {
     // Always cleanup temp frames and audio folders
     safeRemoveFolder(folder);
-    // safeRemoveFolder(audioFolder);
+    safeRemoveFolder(audioFolder);
   }
 };
 
-// Recursively remove a folder and its contents
-const safeRemoveFolder = (folderPath: string): void => {
-  try {
-    if (!fs.existsSync(folderPath)) return;
-    for (const entry of fs.readdirSync(folderPath)) {
-      const p = path.join(folderPath, entry);
-      const s = fs.statSync(p);
-      if (s.isDirectory()) safeRemoveFolder(p);
-      else fs.unlinkSync(p);
-    }
-    fs.rmdirSync(folderPath);
-  } catch (err) {
-    // Best-effort cleanup
-  }
-};
