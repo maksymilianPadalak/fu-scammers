@@ -203,3 +203,9 @@ playwright/.cache/
 
 # Local Netlify folder
 .netlify
+
+# Uploads folder (contains temporary uploaded files)
+uploads/
+**/uploads/
+frames-for-fine-tuning/
+**/frames-for-fine-tuning/
