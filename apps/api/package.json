@@ -10,12 +10,14 @@
     "lint": "eslint src --ext .ts"
   },
   "dependencies": {
+    "cors": "^2.8.5",
+    "dotenv": "^17.2.2",
     "express": "^5.0.0",
-    "cors": "^2.8.5"
+    "openai": "^5.20.2"
   },
   "devDependencies": {
-    "@types/express": "^5.0.0",
     "@types/cors": "^2.8.13",
+    "@types/express": "^5.0.0",
     "@types/node": "^20.5.0",
     "tsx": "^3.12.7",
     "typescript": "^5.2.2"
