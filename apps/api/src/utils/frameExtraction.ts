@@ -31,7 +31,7 @@ export async function extractFrames(
 ): Promise<ExtractFramesResult> {
   const {
     fps = 10,
-    size = '640x480',
+    size = '1920x1080',
     format = 'jpg',
     maxFrames,
     startTime,
@@ -65,16 +65,16 @@ export async function extractFrames(
 
     cmd
       .on('end', () => resolve())
-      .on('error', (err) => reject(err))
+      .on('error', err => reject(err))
       .run();
   });
 
   // Enumerate frames written
   const frames = fs
     .readdirSync(folder)
-    .filter((f) => f.startsWith('frame-') && f.endsWith(`.${format}`))
+    .filter(f => f.startsWith('frame-') && f.endsWith(`.${format}`))
     .sort()
-    .map((f) => path.join(folder, f));
+    .map(f => path.join(folder, f));
 
   return { frames, folder };
 }
