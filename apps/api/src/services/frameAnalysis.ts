@@ -4,49 +4,35 @@ import fs from 'fs';
 import path from 'path';
 import OpenAI from 'openai';
 
-// Set the ffmpeg path to use the static binary
+// Configure FFmpeg to use static binary
 ffmpeg.setFfmpegPath(ffmpegStatic!);
 
-const client = new OpenAI({
+// Initialize OpenAI client
+const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY,
 });
 
-const FORENSIC_SYSTEM_PROMPT = `You are a forensic video analyst AI.
+const AI_DETECTION_SYSTEM_PROMPT = `You are a forensic video analyst AI specialized in detecting AI-generated content.
 
-Your job: decide whether a video is AI-generated or real,
-using evidence from individual frames and the audio track.
+Analyze the provided video frame to determine if it appears to be AI-generated or authentic.
 
-Follow these rules:
-- Look for FRAME-LEVEL ARTIFACTS:
-  • extra or missing fingers, warped hands
-  • irregular teeth, asymmetrical or glassy eyes
-  • gibberish or warped text/logos
-  • inconsistent lighting, shadows, reflections
-  • waxy or overly smooth skin, warped backgrounds
-- Look for TEMPORAL ARTIFACTS across frames:
-  • flickering textures, inconsistent details
-  • facial features that morph or jitter
-  • continuity errors (hair, beards, accessories popping in/out)
-  • unnatural or robotic motion
-  • inconsistent or missing motion blur
-- Look for AUDIO ARTIFACTS:
-  • flat or robotic prosody
-  • missing breaths or unnatural pauses
-  • overly clear or stilted pronunciation
-  • mismatched background ambience
-  • digital glitches or looping noise
-- Be CONSERVATIVE: only assign a high AI likelihood
-  if multiple strong signs are present across modalities.
-- If evidence is weak or ambiguous, return a low likelihood
-  and explain why it seems authentic.
-- Always return STRICT JSON, no prose outside it.
+Look for these AI artifacts:
+- VISUAL ANOMALIES: extra/missing fingers, warped hands, irregular teeth, asymmetrical eyes
+- TEXTURE ISSUES: waxy or overly smooth skin, unnatural lighting, impossible shadows
+- TEXT PROBLEMS: gibberish text, warped logos, inconsistent fonts
+- BACKGROUND INCONSISTENCIES: warped backgrounds, impossible perspectives
 
-JSON schema:
+Be CONSERVATIVE in your assessment:
+- If something catches your eye speak up!
+- If evidence is weak or ambiguous say so, don't favor any direction
+- Always return valid JSON format
+
+Required JSON response format:
 {
-  "ai_generated_likelihood": 0..1,
+  "ai_generated_likelihood": 0.0 to 1.0,
   "label": "ai" | "human" | "uncertain",
-  "artifacts_detected": [string],
-  "rationale": [string]
+  "artifacts_detected": ["list of specific artifacts found"],
+  "rationale": ["detailed explanations for the assessment"]
 }`;
 
 export interface FrameAnalysisResult {
@@ -57,71 +43,48 @@ export interface FrameAnalysisResult {
   error?: string;
 }
 
+/**
+ * Extract the first frame from a video and analyze it for AI-generated content
+ * @param videoPath Path to the video file
+ * @param outputDir Directory to temporarily store the extracted frame
+ * @returns Promise containing analysis results
+ */
 export const extractFirstFrameAndAnalyze = async (
   videoPath: string,
   outputDir: string = path.dirname(videoPath)
 ): Promise<FrameAnalysisResult> => {
-  // Extract first 10 frames to a temporary folder
-  const frameFolder = path.join(
-    outputDir,
-    `frames-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`
-  );
+  const timestamp = Date.now();
+  const randomId = Math.random().toString(36).substring(2, 9);
+  const framePath = path.join(outputDir, `frame-${timestamp}-${randomId}.jpg`);
 
   try {
-    console.log('=== EXTRACTING FIRST 10 FRAMES ===');
-    console.log('Video:', videoPath);
-    console.log('Frames output folder:', frameFolder);
+    console.log('🎬 Extracting first frame from video...');
+    console.log(`📁 Video: ${videoPath}`);
+    console.log(`📸 Output: ${framePath}`);
 
-    // Ensure folder exists
-    fs.mkdirSync(frameFolder, { recursive: true });
+    // Extract single frame at 0.5 seconds
+    await extractSingleFrame(videoPath, framePath);
+    console.log('✅ Frame extracted successfully');
 
-    // Extract 10 frames (1..10 seconds)
-    const framePaths = await extractMultipleFrames(videoPath, frameFolder, 10);
-    console.log(`✅ Extracted ${framePaths.length} frame(s)`);
+    // Analyze the frame for AI-generated content
+    console.log('🔍 Analyzing frame with AI detection model...');
+    const analysis = await analyzeSingleFrameWithOpenAI(framePath);
+    console.log('✅ Analysis completed');
 
-    // Analyze frames using the existing model via Responses API
-    console.log('=== ANALYZING 10 FRAMES WITH MODEL ===');
-    const analysis = await analyzeFramesWithOpenAI(framePaths);
-    console.log('✅ Analysis complete');
-
-    // Cleanup frames
-    try {
-      for (const p of framePaths) {
-        if (fs.existsSync(p)) fs.unlinkSync(p);
-      }
-      if (fs.existsSync(frameFolder)) {
-        // Use rmSync to remove dir even if any residual files remain
-        // Node 14+/18+: rmSync supports recursive removal
-        (fs as any).rmSync ? (fs as any).rmSync(frameFolder, { recursive: true, force: true }) : fs.rmdirSync(frameFolder);
-      }
-      console.log('✅ Temporary frame files cleaned up');
-    } catch (cleanupError) {
-      console.warn('⚠️ Failed to cleanup frame files:', cleanupError);
-    }
+    // Clean up the temporary frame file
+    await cleanupFile(framePath);
 
     return {
       success: true,
       frameExtracted: true,
-      framePath: frameFolder,
+      framePath,
       analysis,
     };
   } catch (error) {
     console.error('❌ Frame extraction/analysis failed:', error);
 
-    // Attempt cleanup on failure
-    try {
-      if (fs.existsSync(frameFolder)) {
-        if ((fs as any).rmSync) {
-          (fs as any).rmSync(frameFolder, { recursive: true, force: true });
-        } else {
-          for (const name of fs.readdirSync(frameFolder)) {
-            const p = path.join(frameFolder, name);
-            if (fs.existsSync(p)) fs.unlinkSync(p);
-          }
-          fs.rmdirSync(frameFolder);
-        }
-      }
-    } catch (_) {}
+    // Ensure cleanup on failure
+    await cleanupFile(framePath);
 
     return {
       success: false,
@@ -134,121 +97,127 @@ export const extractFirstFrameAndAnalyze = async (
   }
 };
 
-const extractMultipleFrames = (
+/**
+ * Extract a single frame from video at 0.5 seconds
+ * @param videoPath Path to the input video file
+ * @param outputPath Path where the frame image will be saved
+ * @returns Promise that resolves when frame is extracted
+ */
+const extractSingleFrame = (
   videoPath: string,
-  outputFolder: string,
-  frameCount: number
-): Promise<string[]> => {
+  outputPath: string
+): Promise<void> => {
   return new Promise((resolve, reject) => {
-    // Generate timestamps 00:00:01 .. 00:00:10
-    const timestamps = Array.from({ length: frameCount }, (_, i) =>
-      `00:00:${String(i + 1).padStart(2, '0')}`
-    );
-
-    const created: string[] = [];
-
     ffmpeg(videoPath)
-      .on('filenames', (filenames: string[]) => {
-        for (const f of filenames) created.push(path.join(outputFolder, f));
-      })
+      .seekInput(0.5) // Extract frame at 0.5 seconds
+      .frames(1) // Only extract 1 frame
+      .size('640x480') // Consistent frame size
+      .output(outputPath)
       .on('end', () => {
-        console.log('Multiple frame extraction completed');
-        // Prefer to read what was actually written to disk to avoid ENOENT
-        let framePaths: string[] = [];
-        try {
-          framePaths = fs
-            .readdirSync(outputFolder)
-            .filter((name) => /^frame-\d+\.jpg$/.test(name) || /^frame-\d{2,}\.jpg$/.test(name) || /^frame-\d{3}\.jpg$/.test(name))
-            .sort((a, b) => {
-              const na = parseInt(a.match(/(\d+)/)?.[1] || '0', 10);
-              const nb = parseInt(b.match(/(\d+)/)?.[1] || '0', 10);
-              return na - nb;
-            })
-            .map((name) => path.join(outputFolder, name));
-        } catch (e) {
-          console.warn('Could not enumerate extracted frames, falling back to planned names:', e);
-        }
-
-        // If directory listing failed or empty, fall back to the names we planned
-        if (framePaths.length === 0) {
-          framePaths = (created.length ? created : Array.from({ length: frameCount }, (_, i) => path.join(outputFolder, `frame-${String(i + 1).padStart(3, '0')}.jpg`)));
-        }
-
-        // Filter only files that actually exist
-        framePaths = framePaths.filter((p) => {
-          try { return fs.existsSync(p); } catch { return false; }
-        });
-
-        resolve(framePaths);
+        console.log('📸 Single frame extraction completed');
+        resolve();
       })
-      .on('error', err => {
-        console.error('FFmpeg error (multi-frame):', err);
-        reject(err);
+      .on('error', error => {
+        console.error('❌ FFmpeg extraction error:', error);
+        reject(new Error(`Frame extraction failed: ${error.message}`));
       })
-      .screenshots({
-        timestamps,
-        filename: 'frame-%i.jpg',
-        folder: outputFolder,
-        size: '640x480',
-      });
+      .run();
   });
 };
 
-const analyzeFramesWithOpenAI = async (framePaths: string[]): Promise<string> => {
+/**
+ * Analyze a single frame using OpenAI's GPT-5 model to detect AI-generated content
+ * @param framePath Path to the frame image file
+ * @returns Promise containing the analysis result as a string
+ */
+const analyzeSingleFrameWithOpenAI = async (
+  framePath: string
+): Promise<string> => {
   try {
-    console.log(`Sending ${Math.min(framePaths.length, 10)} frames to model for analysis...`);
-
-    // Keep only frames that actually exist and are non-empty
-    const existing = framePaths.filter((p) => {
-      try { return fs.existsSync(p) && fs.statSync(p).size > 0; } catch { return false; }
-    });
-
-    if (existing.length === 0) {
-      throw new Error('No frames extracted from video for analysis');
+    // Validate frame file exists and is not empty
+    if (!fs.existsSync(framePath)) {
+      throw new Error('Frame file does not exist');
     }
 
-    // Build content array with up to 10 frames
-    const framesContent = existing.slice(0, 10).map((fp, idx) => {
-      const b64 = fs.readFileSync(fp).toString('base64');
-      return {
-        type: 'input_image' as const,
-        image_url: `data:image/jpeg;base64,${b64}`,
-        detail: 'low' as const,
-      };
-    });
+    const fileStats = fs.statSync(framePath);
+    if (fileStats.size === 0) {
+      throw new Error('Frame file is empty');
+    }
 
-    const resp = await client.responses.create({
-      model: 'gpt-5', // keep existing model
+    console.log(
+      `🔍 Sending frame to GPT-5 for analysis (${fileStats.size} bytes)...`
+    );
+
+    // Convert frame to base64
+    const frameBuffer = fs.readFileSync(framePath);
+    const base64Frame = frameBuffer.toString('base64');
+
+    // Send request to OpenAI
+    const response = await openai.responses.create({
+      model: 'gpt-5',
       input: [
         {
           role: 'system',
           content: [
-            { type: 'input_text' as const, text: FORENSIC_SYSTEM_PROMPT }
-          ]
+            { type: 'input_text' as const, text: AI_DETECTION_SYSTEM_PROMPT },
+          ],
         },
         {
           role: 'user',
           content: [
             {
               type: 'input_text' as const,
-              text:
-                "Analyze if this video looks AI-generated. For each frame, give JSON with fields: frame, ai_likelihood (0–1), artifacts_detected, rationale.",
+              text: 'Analyze this video frame to determine if it appears to be AI-generated. Return your assessment in the specified JSON format.',
             },
-            ...framesContent,
+            {
+              type: 'input_image' as const,
+              image_url: `data:image/jpeg;base64,${base64Frame}`,
+              detail: 'low' as const,
+            },
           ],
         },
       ],
     });
 
-    console.log('Model Analysis Result:', resp.output_text);
-    return resp.output_text;
+    console.log('✅ GPT-5 analysis completed');
+    return response.output_text;
   } catch (error) {
-    console.error('Responses API error:', error);
-    if (error instanceof Error && error.message.includes('billing')) {
-      return 'Unable to analyze frames: OpenAI API billing issue. Please check your account.';
+    console.error('❌ OpenAI analysis failed:', error);
+
+    // Handle specific OpenAI errors
+    if (error instanceof Error) {
+      if (
+        error.message.includes('billing') ||
+        error.message.includes('quota')
+      ) {
+        throw new Error(
+          'OpenAI API billing issue. Please check your account and billing status.'
+        );
+      }
+      if (error.message.includes('rate')) {
+        throw new Error(
+          'OpenAI API rate limit exceeded. Please try again later.'
+        );
+      }
     }
+
     throw new Error(
-      `Analysis failed: ${error instanceof Error ? error.message : 'Unknown error'}`
+      `AI analysis failed: ${error instanceof Error ? error.message : 'Unknown error'}`
     );
+  }
+};
+
+/**
+ * Clean up temporary files safely
+ * @param filePath Path to file to delete
+ */
+const cleanupFile = async (filePath: string): Promise<void> => {
+  try {
+    if (fs.existsSync(filePath)) {
+      fs.unlinkSync(filePath);
+      console.log(`🧹 Cleaned up temporary file: ${path.basename(filePath)}`);
+    }
+  } catch (error) {
+    console.warn(`⚠️ Failed to cleanup file ${filePath}:`, error);
   }
 };

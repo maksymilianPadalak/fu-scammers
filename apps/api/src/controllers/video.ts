@@ -13,98 +13,129 @@ interface VideoUploadRequest extends Request {
   };
 }
 
+/**
+ * Handle video upload, processing, and AI-generated content analysis
+ * Processes one frame from the uploaded video and analyzes it using GPT-5
+ */
 export const uploadVideo = async (req: VideoUploadRequest, res: Response) => {
-  console.log('=== VIDEO UPLOAD ENDPOINT CALLED ===');
-  console.log('Method:', req.method);
-  console.log('Headers:', req.headers);
-  console.log('Body:', req.body);
-  console.log(
-    'File:',
-    req.file
-      ? {
-          originalname: req.file.originalname,
-          mimetype: req.file.mimetype,
-          size: req.file.size,
-        }
-      : 'No file'
-  );
+  logRequestDetails(req);
 
   try {
-    // Check if file was uploaded
+    // Validate file upload
     if (!req.file) {
       return res.status(400).json({
         success: false,
-        error:
-          'No video file provided. Make sure to include a file with the key "video" in your form data.',
+        error: 'No video file provided. Make sure to include a file with the key "video" in your form data.',
       });
     }
 
-    // Get additional info from request body
     const additionalInfo = req.body.description || req.body.info || null;
 
-    // Process the video upload
-    const result = await processVideoUpload(req.file, additionalInfo);
-
-    if (!result.success) {
+    // Step 1: Process and validate the video upload
+    console.log('🎬 Processing video upload...');
+    const uploadResult = await processVideoUpload(req.file, additionalInfo);
+    
+    if (!uploadResult.success) {
       return res.status(400).json({
         success: false,
-        error: result.error,
+        error: uploadResult.error,
       });
     }
 
-    // Extract first frame and analyze for AI-generated content
-    console.log('Starting AI-generated video detection...')
-    const frameAnalysis = await extractFirstFrameAndAnalyze(req.file.path)
+    // Step 2: Extract first frame and analyze for AI-generated content
+    console.log('🔍 Starting AI-generated content detection...');
+    const frameAnalysis = await extractFirstFrameAndAnalyze(req.file.path);
 
-    // If OpenAI failed in the service, return HTTP 502 with error
     if (!frameAnalysis.success || !frameAnalysis.analysis) {
       return res.status(502).json({
         success: false,
-        error: frameAnalysis.error || 'OpenAI analysis failed',
-      })
+        error: frameAnalysis.error || 'AI analysis failed',
+      });
     }
 
-    // Parse AI output into a typed structure if possible
-    const parsed = parseAIDetectionOutput(frameAnalysis.analysis)
+    // Step 3: Parse and structure the AI analysis results
+    console.log('📊 Parsing AI analysis results...');
+    const parsedAnalysis = parseAIDetectionOutput(frameAnalysis.analysis);
 
-    // Prepare successful response with frame analysis
-    const responseData = {
-      success: true,
-      message: 'Video uploaded, processed, and analyzed successfully',
-      data: {
-        metadata: result.metadata,
-        uploadedAt: new Date().toISOString(),
-        filePath: req.file.path,
-        frameAnalysis: {
-          success: true,
-          raw: frameAnalysis.analysis,
-          parsed: parsed.data,
-          parseError: parsed.error,
-          // Keep backward-compat fields for frame-array outputs
-          frames: Array.isArray(parsed.data) ? parsed.data : undefined,
-          summary: !Array.isArray(parsed.data) ? parsed.data : undefined,
-        }
-      },
-    };
+    // Step 4: Prepare and send successful response
+    const responseData = buildSuccessResponse(
+      uploadResult.metadata!,
+      req.file.path,
+      frameAnalysis.analysis,
+      parsedAnalysis
+    );
 
-    // Send the response first
-    res.status(200).json(responseData)
+    res.status(200).json(responseData);
+    console.log('✅ Video upload and analysis completed successfully');
 
-    // Clean up the video file after successful response
-    try {
-      if (fs.existsSync(req.file!.path)) {
-        fs.unlinkSync(req.file!.path)
-        console.log('✅ Video file cleaned up:', req.file!.path)
-      }
-    } catch (error) {
-      console.error('❌ Failed to cleanup video file:', req.file!.path, error)
-    }
+    // Step 5: Clean up uploaded video file (after response sent)
+    await cleanupVideoFile(req.file.path);
   } catch (error) {
-    console.error('Error in video upload controller:', error);
-
+    console.error('❌ Error in video upload controller:', error);
     return res.status(500).json({
       success: false,
       error: 'Internal server error during video upload',
     });
+  }
+};
+
+/**
+ * Log incoming request details for debugging
+ */
+const logRequestDetails = (req: VideoUploadRequest): void => {
+  console.log('\n=== VIDEO UPLOAD REQUEST ===');
+  console.log('Method:', req.method);
+  console.log('Content-Type:', req.headers['content-type']);
+  console.log('Body:', req.body);
+  console.log('File:', req.file ? {
+    name: req.file.originalname,
+    type: req.file.mimetype,
+    size: `${(req.file.size / 1024 / 1024).toFixed(2)} MB`,
+  } : 'No file uploaded');
+  console.log('============================\n');
+};
+
+/**
+ * Build the success response object with structured data
+ */
+const buildSuccessResponse = (
+  metadata: any,
+  filePath: string,
+  rawAnalysis: string,
+  parsedAnalysis: any
+) => {
+  return {
+    success: true,
+    message: 'Video uploaded and analyzed successfully',
+    data: {
+      video: {
+        metadata,
+        uploadedAt: new Date().toISOString(),
+        filePath,
+      },
+      analysis: {
+        success: true,
+        raw: rawAnalysis,
+        parsed: parsedAnalysis.data,
+        parseError: parsedAnalysis.error,
+        // Backward compatibility fields
+        frames: Array.isArray(parsedAnalysis.data) ? parsedAnalysis.data : undefined,
+        summary: !Array.isArray(parsedAnalysis.data) ? parsedAnalysis.data : undefined,
+      },
+    },
+  };
+};
+
+/**
+ * Safely clean up the uploaded video file
+ */
+const cleanupVideoFile = async (filePath: string): Promise<void> => {
+  try {
+    if (fs.existsSync(filePath)) {
+      fs.unlinkSync(filePath);
+      console.log('🧹 Video file cleaned up:', filePath);
+    }
+  } catch (error) {
+    console.error('⚠️ Failed to cleanup video file:', filePath, error);
   }
 };
