@@ -5,9 +5,8 @@ import OpenAI from 'openai';
 const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 
 // Hardcoded model configuration
-const SYSTEM_PROMPT = `You are a forensic video analyst AI.
-Return JSON only with keys: ai_generated_likelihood (0..1), label (ai|human|uncertain), artifacts_detected [string], rationale [string].`;
-const IMAGE_DETAIL = 'low' as const;
+import { FORENSIC_SYSTEM_PROMPT } from './prompts';
+const IMAGE_DETAIL = 'high' as const;
 
 /**
  * Analyze one or more frames using OpenAI Responses API and return raw output text.
@@ -40,7 +39,7 @@ export async function analyzeFrameWithOpenAI(
     input: [
       {
         role: 'system',
-        content: [{ type: 'input_text' as const, text: SYSTEM_PROMPT }],
+        content: [{ type: 'input_text' as const, text: FORENSIC_SYSTEM_PROMPT }],
       },
       {
         role: 'user',
