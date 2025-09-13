@@ -1,0 +1,37 @@
+# Dependencies
+node_modules/
+pnpm-lock.yaml
+
+# Build outputs
+dist/
+build/
+.turbo/
+
+# Generated files
+*.min.js
+*.min.css
+
+# Package files
+package-lock.json
+
+# IDE
+.vscode/
+.idea/
+
+# OS
+.DS_Store
+
+# Logs
+*.log
+
+# Coverage
+coverage/
+
+# Browser extension files
+*.crx
+*.xpi
+web-ext-artifacts/
+
+# Test artifacts
+test-results/
+playwright-report/

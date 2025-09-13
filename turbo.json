@@ -15,6 +15,12 @@
     },
     "type-check": {
       "dependsOn": ["^type-check"]
+    },
+    "format": {
+      "dependsOn": ["^format"]
+    },
+    "format:check": {
+      "dependsOn": ["^format:check"]
     }
   }
 }

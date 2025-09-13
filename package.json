@@ -6,9 +6,12 @@
     "dev": "turbo run dev",
     "dev:fast": "turbo run dev --parallel",
     "lint": "turbo run lint",
-    "type-check": "turbo run type-check"
+    "type-check": "turbo run type-check",
+    "format": "prettier --write .",
+    "format:check": "prettier --check ."
   },
   "devDependencies": {
+    "prettier": "^3.6.2",
     "turbo": "^1.10.16",
     "typescript": "^5.2.2"
   },
