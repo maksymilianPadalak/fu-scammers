@@ -2,8 +2,9 @@ import type { Request, Response } from 'express';
 import { processVideoUpload } from '../services/video';
 import { extractAndAnalyze } from '../services/frameAnalysis';
 import { parseAIDetectionOutput } from '../types/ai';
-import { triggerFrameStreaming, broadcastAnalysisStatus } from '../ws';
+import { triggerFrameStreaming, broadcastAnalysisStatus, stopFrameStreaming } from '../ws';
 import fs from 'fs';
+import path from 'path';
 
 interface VideoUploadRequest extends Request {
   file?: Express.Multer.File;
@@ -75,11 +76,16 @@ export const uploadVideo = async (req: VideoUploadRequest, res: Response) => {
     );
 
     broadcastAnalysisStatus('completed', 'Analysis completed successfully!');
+    
+    // Stop frame streaming since analysis is complete
+    stopFrameStreaming(req.file.path);
+    
     res.status(200).json(responseData);
     console.log('✅ Video upload and analysis completed successfully');
 
-    // Step 5: Clean up uploaded video file (after response sent)
+    // Step 5: Clean up uploaded video file and extracted frames (after response sent)
     await cleanupVideoFile(req.file.path);
+    await cleanupExtractedFrames(req.file.path);
   } catch (error) {
     console.error('❌ Error in video upload controller:', error);
     return res.status(500).json({
@@ -152,9 +158,41 @@ const cleanupVideoFile = async (filePath: string): Promise<void> => {
   try {
     if (fs.existsSync(filePath)) {
       fs.unlinkSync(filePath);
-      console.log('🧹 Video file cleaned up:', filePath);
+      console.log('🧡 Video file cleaned up:', filePath);
     }
   } catch (error) {
     console.error('⚠️ Failed to cleanup video file:', filePath, error);
+  }
+};
+
+/**
+ * Clean up extracted frame files
+ */
+const cleanupExtractedFrames = async (videoPath: string): Promise<void> => {
+  try {
+    const videoDir = path.dirname(videoPath);
+    const videoBaseName = path.basename(videoPath, path.extname(videoPath));
+    
+    // Find and delete frame files (they usually have pattern like video-name_frame_001.jpg)
+    const files = fs.readdirSync(videoDir);
+    let deletedCount = 0;
+    
+    for (const file of files) {
+      if (file.includes(videoBaseName) && (file.endsWith('.jpg') || file.endsWith('.png'))) {
+        const framePath = path.join(videoDir, file);
+        try {
+          fs.unlinkSync(framePath);
+          deletedCount++;
+        } catch (err) {
+          console.error('⚠️ Failed to delete frame file:', framePath, err);
+        }
+      }
+    }
+    
+    if (deletedCount > 0) {
+      console.log(`🧡 Cleaned up ${deletedCount} extracted frame files`);
+    }
+  } catch (error) {
+    console.error('⚠️ Failed to cleanup extracted frames:', error);
   }
 };

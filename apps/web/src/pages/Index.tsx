@@ -1,12 +1,10 @@
 import Hero from "@/components/Hero";
-import VideoUploadForm from "@/components/VideoUploadForm";
+import VideoUploadForm from "@/components/VideoUploadFormWithFrames";
 import AIDetectionResults, { AIDetectionSummary } from "@/components/AIDetectionResults";
-import LiveFrames from "@/components/LiveFrames";
 import { useState } from "react";
 
 const Index = () => {
   const [analysisResult, setAnalysisResult] = useState<AIDetectionSummary | null>(null);
-  const [isAnalyzing, setIsAnalyzing] = useState<boolean>(false);
 
   const scrollToUpload = () => {
     const uploadSection = document.getElementById('upload');
@@ -18,24 +16,17 @@ const Index = () => {
       <Hero onScrollToUpload={scrollToUpload} />
 
       <div className="w-full max-w-3xl mx-auto px-4 md:px-6 py-8 md:py-16 space-y-8">
-        {/* 1) Upload form */}
+        {/* 1) Upload form with integrated live frames */}
         <VideoUploadForm
           onUploadStart={() => {
-            setIsAnalyzing(true);
             setAnalysisResult(null); // Clear previous results
           }}
           onAnalyzed={(payload) => {
             // Defensive in case payload is null/undefined
             const parsed = payload?.parsed ?? null;
             setAnalysisResult(parsed);
-            setIsAnalyzing(false); // Stop live frames
           }}
         />
-
-        {/* 1.5) Live frames during analysis */}
-        {isAnalyzing && (
-          <LiveFrames isUploading={isAnalyzing} />
-        )}
 
         {/* 2) Results always under the form */}
         {analysisResult && (

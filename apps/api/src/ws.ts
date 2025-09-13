@@ -55,35 +55,85 @@ export function setupWebSocket(server: HTTPServer, opts?: { port?: number; path?
   });
 }
 
+// Store frame data for looping
+interface FrameStreamData {
+  frames: string[];
+  isStreaming: boolean;
+  intervalId?: NodeJS.Timeout;
+}
+
+const activeStreams = new Map<string, FrameStreamData>();
+
 // Function to stream frames from a video file
 async function streamFramesFromVideo(videoPath: string, send: (obj: unknown) => void) {
-  send({ type: 'status', message: 'Extracting frames…' });
+  send({ type: 'status', message: 'Extracting frames for preview…' });
 
   try {
-    // Extract a quick set of frames for preview (e.g., 8 frames)
+    // Extract more frames for better animation (e.g., 15 frames)
     const { frames } = await extractFrames(videoPath, {
-      fps: 1.5,
-      maxFrames: 8,
+      fps: 1,
+      maxFrames: 15,
       size: '640x360',
       outputDir: path.dirname(videoPath),
     });
 
-    // Stream frames as base64 data URLs with a slight delay for animation effect
-    const total = frames.length;
-    for (let i = 0; i < frames.length; i++) {
-      const f = frames[i];
-      if (fs.existsSync(f)) {
-        const buf = fs.readFileSync(f);
+    // Convert frames to base64 data URLs
+    const frameDataUrls: string[] = [];
+    for (const framePath of frames) {
+      if (fs.existsSync(framePath)) {
+        const buf = fs.readFileSync(framePath);
         const b64 = buf.toString('base64');
-        const dataUrl = `data:image/jpeg;base64,${b64}`;
-        send({ type: 'frame', index: i, total, image: dataUrl });
-        await delay(300); // Slightly slower for better visual effect
+        frameDataUrls.push(`data:image/jpeg;base64,${b64}`);
       }
     }
 
-    send({ type: 'status', message: 'Frame extraction complete. Analysis in progress…' });
+    if (frameDataUrls.length === 0) {
+      send({ type: 'error', message: 'No frames could be extracted' });
+      return;
+    }
+
+    // Store frame data and start streaming
+    const streamData: FrameStreamData = {
+      frames: frameDataUrls,
+      isStreaming: true
+    };
+    activeStreams.set(videoPath, streamData);
+
+    send({ type: 'status', message: 'Starting frame preview…' });
+
+    // Start streaming frames every 500ms with looping
+    let currentIndex = 0;
+    streamData.intervalId = setInterval(() => {
+      if (!streamData.isStreaming) {
+        clearInterval(streamData.intervalId!);
+        return;
+      }
+
+      send({ 
+        type: 'frame', 
+        index: currentIndex, 
+        total: frameDataUrls.length, 
+        image: frameDataUrls[currentIndex] 
+      });
+
+      currentIndex = (currentIndex + 1) % frameDataUrls.length; // Loop back to start
+    }, 500); // Send frame every 500ms
+
+    send({ type: 'status', message: 'Frame preview active. Analysis in progress…' });
   } catch (err) {
     send({ type: 'error', message: err instanceof Error ? err.message : 'Frame extraction failed' });
+  }
+}
+
+// Function to stop streaming for a specific video
+export function stopFrameStreaming(videoPath: string) {
+  const streamData = activeStreams.get(videoPath);
+  if (streamData) {
+    streamData.isStreaming = false;
+    if (streamData.intervalId) {
+      clearInterval(streamData.intervalId);
+    }
+    activeStreams.delete(videoPath);
   }
 }
 
