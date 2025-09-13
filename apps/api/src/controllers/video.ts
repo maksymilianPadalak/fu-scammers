@@ -57,6 +57,12 @@ export const uploadVideo = async (req: VideoUploadRequest, res: Response) => {
 
     if (!frameAnalysis.success || !frameAnalysis.analysis) {
       broadcastAnalysisStatus('error', frameAnalysis.error || 'AI analysis failed');
+      
+      // Clean up files even on analysis failure
+      stopFrameStreaming(req.file.path);
+      await cleanupVideoFile(req.file.path);
+      await cleanupExtractedFrames(req.file.path);
+      
       return res.status(502).json({
         success: false,
         error: frameAnalysis.error || 'AI analysis failed',
@@ -88,6 +94,18 @@ export const uploadVideo = async (req: VideoUploadRequest, res: Response) => {
     await cleanupExtractedFrames(req.file.path);
   } catch (error) {
     console.error('❌ Error in video upload controller:', error);
+    
+    // Clean up files even on server error
+    if (req.file) {
+      try {
+        stopFrameStreaming(req.file.path);
+        await cleanupVideoFile(req.file.path);
+        await cleanupExtractedFrames(req.file.path);
+      } catch (cleanupError) {
+        console.error('⚠️ Failed to cleanup files after error:', cleanupError);
+      }
+    }
+    
     return res.status(500).json({
       success: false,
       error: 'Internal server error during video upload',
@@ -166,31 +184,51 @@ const cleanupVideoFile = async (filePath: string): Promise<void> => {
 };
 
 /**
- * Clean up extracted frame files
+ * Clean up extracted frame files and folders
  */
 const cleanupExtractedFrames = async (videoPath: string): Promise<void> => {
   try {
     const videoDir = path.dirname(videoPath);
-    const videoBaseName = path.basename(videoPath, path.extname(videoPath));
     
-    // Find and delete frame files (they usually have pattern like video-name_frame_001.jpg)
-    const files = fs.readdirSync(videoDir);
-    let deletedCount = 0;
+    // Find and delete frame folders (they have pattern like frames-1234567-abc123)
+    const items = fs.readdirSync(videoDir);
+    let deletedFolders = 0;
+    let deletedFiles = 0;
     
-    for (const file of files) {
-      if (file.includes(videoBaseName) && (file.endsWith('.jpg') || file.endsWith('.png'))) {
-        const framePath = path.join(videoDir, file);
+    for (const item of items) {
+      const itemPath = path.join(videoDir, item);
+      const stat = fs.lstatSync(itemPath);
+      
+      // Delete frame folders created by extractFrames
+      if (stat.isDirectory() && item.startsWith('frames-')) {
         try {
-          fs.unlinkSync(framePath);
-          deletedCount++;
+          // Delete all files in the folder first
+          const frameFiles = fs.readdirSync(itemPath);
+          for (const frameFile of frameFiles) {
+            const frameFilePath = path.join(itemPath, frameFile);
+            fs.unlinkSync(frameFilePath);
+            deletedFiles++;
+          }
+          // Then delete the folder
+          fs.rmdirSync(itemPath);
+          deletedFolders++;
         } catch (err) {
-          console.error('⚠️ Failed to delete frame file:', framePath, err);
+          console.error('⚠️ Failed to delete frame folder:', itemPath, err);
+        }
+      }
+      // Also clean up any loose frame files that might exist
+      else if (stat.isFile() && (item.startsWith('frame-') || item.includes('frame_')) && (item.endsWith('.jpg') || item.endsWith('.png'))) {
+        try {
+          fs.unlinkSync(itemPath);
+          deletedFiles++;
+        } catch (err) {
+          console.error('⚠️ Failed to delete frame file:', itemPath, err);
         }
       }
     }
     
-    if (deletedCount > 0) {
-      console.log(`🧡 Cleaned up ${deletedCount} extracted frame files`);
+    if (deletedFolders > 0 || deletedFiles > 0) {
+      console.log(`🧡 Cleaned up ${deletedFolders} frame folders and ${deletedFiles} frame files`);
     }
   } catch (error) {
     console.error('⚠️ Failed to cleanup extracted frames:', error);
