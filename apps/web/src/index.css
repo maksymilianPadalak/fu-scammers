@@ -1,0 +1,219 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Berlin Minimalistic Design System - Brutalist & Functional */
+
+@layer base {
+  :root {
+    /* Core Berlin Minimalistic Palette */
+    --background: 0 0% 98%;
+    --foreground: 0 0% 5%;
+
+    --card: 0 0% 100%;
+    --card-foreground: 0 0% 5%;
+
+    --popover: 0 0% 100%;
+    --popover-foreground: 0 0% 5%;
+
+    /* Stark Contrast Primary */
+    --primary: 0 0% 5%;
+    --primary-foreground: 0 0% 98%;
+
+    /* Minimal Secondary */
+    --secondary: 0 0% 90%;
+    --secondary-foreground: 0 0% 5%;
+
+    /* Functional Muted */
+    --muted: 0 0% 92%;
+    --muted-foreground: 0 0% 40%;
+
+    /* Bold Accent - Danger Red for Anti-Scam */
+    --accent: 0 85% 55%;
+    --accent-foreground: 0 0% 98%;
+
+    /* Warning Destructive */
+    --destructive: 0 85% 55%;
+    --destructive-foreground: 0 0% 98%;
+
+    /* Clean Borders */
+    --border: 0 0% 85%;
+    --input: 0 0% 85%;
+    --ring: 0 85% 55%;
+
+    --radius: 0;
+
+    /* Berlin Minimalistic Spacing */
+    --spacing-brutal: 2rem;
+    --spacing-micro: 0.125rem;
+    
+    /* Typography Scale */
+    --text-massive: 4rem;
+    --text-huge: 3rem;
+    --text-large: 2rem;
+    --text-base: 1rem;
+    --text-small: 0.875rem;
+    
+    /* Shadows - Minimal */
+    --shadow-brutal: 4px 4px 0px hsl(var(--foreground));
+    --shadow-none: none;
+
+    --sidebar-background: 0 0% 98%;
+
+    --sidebar-foreground: 240 5.3% 26.1%;
+
+    --sidebar-primary: 240 5.9% 10%;
+
+    --sidebar-primary-foreground: 0 0% 98%;
+
+    --sidebar-accent: 240 4.8% 95.9%;
+
+    --sidebar-accent-foreground: 240 5.9% 10%;
+
+    --sidebar-border: 220 13% 91%;
+
+    --sidebar-ring: 217.2 91.2% 59.8%;
+  }
+
+  .dark {
+    --background: 222.2 84% 4.9%;
+    --foreground: 210 40% 98%;
+
+    --card: 222.2 84% 4.9%;
+    --card-foreground: 210 40% 98%;
+
+    --popover: 222.2 84% 4.9%;
+    --popover-foreground: 210 40% 98%;
+
+    --primary: 210 40% 98%;
+    --primary-foreground: 222.2 47.4% 11.2%;
+
+    --secondary: 217.2 32.6% 17.5%;
+    --secondary-foreground: 210 40% 98%;
+
+    --muted: 217.2 32.6% 17.5%;
+    --muted-foreground: 215 20.2% 65.1%;
+
+    --accent: 217.2 32.6% 17.5%;
+    --accent-foreground: 210 40% 98%;
+
+    --destructive: 0 62.8% 30.6%;
+    --destructive-foreground: 210 40% 98%;
+
+    --border: 217.2 32.6% 17.5%;
+    --input: 217.2 32.6% 17.5%;
+    --ring: 212.7 26.8% 83.9%;
+    --sidebar-background: 240 5.9% 10%;
+    --sidebar-foreground: 240 4.8% 95.9%;
+    --sidebar-primary: 224.3 76.3% 48%;
+    --sidebar-primary-foreground: 0 0% 100%;
+    --sidebar-accent: 240 3.7% 15.9%;
+    --sidebar-accent-foreground: 240 4.8% 95.9%;
+    --sidebar-border: 240 3.7% 15.9%;
+    --sidebar-ring: 217.2 91.2% 59.8%;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+
+  body {
+    @apply bg-background text-foreground;
+    font-family: 'Courier New', 'Monaco', 'Menlo', monospace;
+    font-weight: 400;
+  }
+
+  /* Mobile-First Typography */
+  .text-brutal-massive {
+    font-size: 2.5rem;
+    line-height: 0.9;
+    font-weight: 900;
+    letter-spacing: -0.02em;
+    font-family: 'Courier New', monospace;
+  }
+
+  .text-brutal-huge {
+    font-size: 2rem;
+    line-height: 0.95;
+    font-weight: 700;
+    font-family: 'Courier New', monospace;
+  }
+
+  .text-brutal-large {
+    font-size: 1.5rem;
+    line-height: 1.1;
+    font-weight: 600;
+    font-family: 'Courier New', monospace;
+  }
+
+  /* Desktop Typography */
+  @media (min-width: 768px) {
+    .text-brutal-massive {
+      font-size: var(--text-massive);
+    }
+
+    .text-brutal-huge {
+      font-size: var(--text-huge);
+    }
+
+    .text-brutal-large {
+      font-size: var(--text-large);
+    }
+  }
+
+  /* Brutal Shadows */
+  .shadow-brutal {
+    box-shadow: var(--shadow-brutal);
+  }
+
+  .shadow-brutal-accent {
+    box-shadow: 4px 4px 0px hsl(var(--accent));
+  }
+
+  /* Brutal Buttons */
+  .btn-brutal {
+    @apply border-2 border-foreground bg-background text-foreground;
+    box-shadow: 4px 4px 0px hsl(var(--foreground));
+    transition: all 0.1s ease;
+  }
+
+  .btn-brutal:hover {
+    transform: translate(2px, 2px);
+    box-shadow: 2px 2px 0px hsl(var(--foreground));
+  }
+
+  .btn-brutal:active {
+    transform: translate(4px, 4px);
+    box-shadow: none;
+  }
+
+  /* Mobile-specific optimizations */
+  @media (max-width: 768px) {
+    body {
+      -webkit-overflow-scrolling: touch;
+      overscroll-behavior-y: contain;
+    }
+    
+    /* Prevent zoom on inputs */
+    input, select, textarea {
+      font-size: 16px;
+    }
+    
+    /* Better touch targets */
+    button, .btn-brutal {
+      min-height: 44px;
+      min-width: 44px;
+    }
+  }
+
+  /* PWA safe areas */
+  .safe-top {
+    padding-top: env(safe-area-inset-top);
+  }
+  
+  .safe-bottom {
+    padding-bottom: env(safe-area-inset-bottom);
+  }
+}

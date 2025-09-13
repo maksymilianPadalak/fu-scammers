@@ -120,6 +120,7 @@ turbo-build.log
 # Build outputs
 build/
 dist/
+dist-ssr/
 *.tgz
 
 # Browser Extension specific
@@ -134,10 +135,16 @@ web-ext-artifacts/
 
 # IDE and editor files
 .vscode/
+!.vscode/extensions.json
 .idea/
 *.swp
 *.swo
 *~
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
 
 # OS generated files
 .DS_Store
