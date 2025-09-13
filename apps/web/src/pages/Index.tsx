@@ -12,7 +12,7 @@ const Index = () => {
   };
 
   return (
-    <main className="min-h-screen bg-background">
+    <main className="min-h-[calc(100vh-4rem)] bg-background">
       <Hero onScrollToUpload={scrollToUpload} />
 
       <div className="w-full max-w-3xl mx-auto px-4 md:px-6 py-8 md:py-16 space-y-8">
