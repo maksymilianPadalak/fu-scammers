@@ -57,15 +57,6 @@ export const processFineTuneVideo = async (
       size // User-selected size that preserves aspect ratio
     });
 
-    // Clean up the uploaded video file
-    try {
-      if (fs.existsSync(req.file.path)) {
-        fs.unlinkSync(req.file.path);
-        console.log('🧹 Cleaned up uploaded video file');
-      }
-    } catch (cleanupError) {
-      console.warn('⚠️ Failed to cleanup video file:', cleanupError);
-    }
 
     // Prepare response
     const responseData = {
@@ -101,16 +92,6 @@ export const processFineTuneVideo = async (
   } catch (error) {
     console.error('❌ Error in fine-tune video processing:', error);
 
-    // Clean up video file even on error
-    if (req.file) {
-      try {
-        if (fs.existsSync(req.file.path)) {
-          fs.unlinkSync(req.file.path);
-        }
-      } catch (cleanupError) {
-        console.error('⚠️ Failed to cleanup files after error:', cleanupError);
-      }
-    }
 
     return res.status(500).json({
       success: false,
