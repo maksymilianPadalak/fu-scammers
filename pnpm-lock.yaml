@@ -35,6 +35,9 @@ importers:
       ffmpeg-static:
         specifier: ^5.2.0
         version: 5.2.0
+      ffprobe-static:
+        specifier: ^3.1.0
+        version: 3.1.0
       fluent-ffmpeg:
         specifier: ^2.1.3
         version: 2.1.3
@@ -4463,6 +4466,10 @@ packages:
       progress: 2.0.3
     transitivePeerDependencies:
       - supports-color
+    dev: false
+
+  /ffprobe-static@3.1.0:
+    resolution: {integrity: sha512-Dvpa9uhVMOYivhHKWLGDoa512J751qN1WZAIO+Xw4L/mrUSPxS4DApzSUDbCFE/LUq2+xYnznEahTd63AqBSpA==}
     dev: false
 
   /file-entry-cache@8.0.0:

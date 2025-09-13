@@ -1,6 +1,7 @@
 import type { Request, Response } from 'express';
 import { processVideoUpload } from '../services/video';
 import { extractFirstFrameAndAnalyze } from '../services/frameAnalysis';
+import { parseAIDetectionOutput, type AIDetection } from '../types/ai';
 import fs from 'fs';
 
 interface VideoUploadRequest extends Request {
@@ -54,7 +55,18 @@ export const uploadVideo = async (req: VideoUploadRequest, res: Response) => {
     // Extract first frame and analyze for AI-generated content
     console.log('Starting AI-generated video detection...')
     const frameAnalysis = await extractFirstFrameAndAnalyze(req.file.path)
-    
+
+    // If OpenAI failed in the service, return HTTP 502 with error
+    if (!frameAnalysis.success || !frameAnalysis.analysis) {
+      return res.status(502).json({
+        success: false,
+        error: frameAnalysis.error || 'OpenAI analysis failed',
+      })
+    }
+
+    // Parse AI output into a typed structure if possible
+    const parsed = parseAIDetectionOutput(frameAnalysis.analysis)
+
     // Prepare successful response with frame analysis
     const responseData = {
       success: true,
@@ -64,9 +76,13 @@ export const uploadVideo = async (req: VideoUploadRequest, res: Response) => {
         uploadedAt: new Date().toISOString(),
         filePath: req.file.path,
         frameAnalysis: {
-          success: frameAnalysis.success,
-          analysis: frameAnalysis.analysis,
-          error: frameAnalysis.error
+          success: true,
+          raw: frameAnalysis.analysis,
+          parsed: parsed.data,
+          parseError: parsed.error,
+          // Keep backward-compat fields for frame-array outputs
+          frames: Array.isArray(parsed.data) ? parsed.data : undefined,
+          summary: !Array.isArray(parsed.data) ? parsed.data : undefined,
         }
       },
     };
