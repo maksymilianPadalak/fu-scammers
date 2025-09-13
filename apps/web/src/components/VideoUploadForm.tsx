@@ -7,10 +7,11 @@ import { useToast } from "@/hooks/use-toast";
 import type { AIDetectionSummary } from "./AIDetectionResults";
 
 export interface VideoUploadFormProps {
-  onAnalyzed: (data: AIDetectionSummary | null) => void;
+  onUploadStart: () => void;
+  onAnalyzed: (payload: { parsed: AIDetectionSummary | null; videoPath?: string | null }) => void;
 }
 
-const VideoUploadForm = ({ onAnalyzed }: VideoUploadFormProps) => {
+const VideoUploadForm = ({ onUploadStart, onAnalyzed }: VideoUploadFormProps) => {
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [isDragging, setIsDragging] = useState(false);
   const [scammerInfo, setScammerInfo] = useState("");
@@ -91,6 +92,7 @@ const VideoUploadForm = ({ onAnalyzed }: VideoUploadFormProps) => {
 
     setIsUploading(true);
     setUploadProgress(0);
+    onUploadStart(); // Trigger live frames animation
 
     try {
       const formData = new FormData();
@@ -107,7 +109,8 @@ const VideoUploadForm = ({ onAnalyzed }: VideoUploadFormProps) => {
         });
       }, 200);
 
-      const response = await fetch("http://localhost:3001/api/upload-video", {
+      const API_BASE = (import.meta as any).env?.VITE_API_BASE || "http://localhost:3001";
+      const response = await fetch(`${API_BASE}/api/upload-video`, {
         method: "POST",
         body: formData,
       });
@@ -120,7 +123,8 @@ const VideoUploadForm = ({ onAnalyzed }: VideoUploadFormProps) => {
 
       if (result.success) {
         const parsed = result?.data?.analysis?.parsed ?? null;
-        onAnalyzed(parsed);
+        const videoPath = result?.data?.video?.filePath ?? null;
+        onAnalyzed({ parsed, videoPath });
 
         toast({
           title: "EVIDENCE SUBMITTED & ANALYZED",
@@ -135,7 +139,7 @@ const VideoUploadForm = ({ onAnalyzed }: VideoUploadFormProps) => {
       }
     } catch (error) {
       console.error("Upload error:", error);
-      onAnalyzed(null);
+      onAnalyzed({ parsed: null, videoPath: null });
       toast({
         title: "UPLOAD FAILED",
         description: error instanceof Error ? error.message : "Unknown error",

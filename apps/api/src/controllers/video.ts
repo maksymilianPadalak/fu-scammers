@@ -2,6 +2,7 @@ import type { Request, Response } from 'express';
 import { processVideoUpload } from '../services/video';
 import { extractAndAnalyze } from '../services/frameAnalysis';
 import { parseAIDetectionOutput } from '../types/ai';
+import { triggerFrameStreaming, broadcastAnalysisStatus } from '../ws';
 import fs from 'fs';
 
 interface VideoUploadRequest extends Request {
@@ -33,7 +34,7 @@ export const uploadVideo = async (req: VideoUploadRequest, res: Response) => {
     const additionalInfo = req.body.description || req.body.info || null;
 
     // Step 1: Process and validate the video upload
-    console.log('🎬 Processing video upload...');
+    console.log('🎦 Processing video upload...');
     const uploadResult = await processVideoUpload(req.file, additionalInfo);
 
     if (!uploadResult.success) {
@@ -43,11 +44,18 @@ export const uploadVideo = async (req: VideoUploadRequest, res: Response) => {
       });
     }
 
+    // Step 1.5: Trigger frame streaming immediately for loading animation
+    console.log('🎥 Starting frame streaming for live preview...');
+    triggerFrameStreaming(req.file.path);
+    broadcastAnalysisStatus('starting', 'Analyzing video for AI-generated content...');
+
     // Step 2: Extract first frame and analyze for AI-generated content
     console.log('🔍 Starting AI-generated content detection...');
+    broadcastAnalysisStatus('processing', 'Running AI detection algorithms...');
     const frameAnalysis = await extractAndAnalyze(req.file.path);
 
     if (!frameAnalysis.success || !frameAnalysis.analysis) {
+      broadcastAnalysisStatus('error', frameAnalysis.error || 'AI analysis failed');
       return res.status(502).json({
         success: false,
         error: frameAnalysis.error || 'AI analysis failed',
@@ -66,6 +74,7 @@ export const uploadVideo = async (req: VideoUploadRequest, res: Response) => {
       parsedAnalysis
     );
 
+    broadcastAnalysisStatus('completed', 'Analysis completed successfully!');
     res.status(200).json(responseData);
     console.log('✅ Video upload and analysis completed successfully');
 
