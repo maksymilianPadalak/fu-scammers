@@ -127,13 +127,25 @@ const VideoUpload = () => {
       }
 
       if (result.success) {
-        // Log metadata to console as requested
+        // Log metadata and analysis to console as requested
         console.log('=== VIDEO UPLOAD SUCCESS ===');
         console.log('Response:', result);
         console.log('Video Metadata:', result.data?.metadata);
         console.log('File Path:', result.data?.filePath);
         console.log('Upload Timestamp:', result.data?.uploadedAt);
-        console.log('==========================');
+        
+        if (result.data?.frameAnalysis) {
+          console.log('=== AI-GENERATED VIDEO DETECTION ===');
+          console.log('Detection Success:', result.data.frameAnalysis.success);
+          if (result.data.frameAnalysis.success) {
+            console.log('GPT-4.1 Detection Result:', result.data.frameAnalysis.analysis);
+          } else {
+            console.log('Detection Error:', result.data.frameAnalysis.error);
+          }
+          console.log('==================================');
+        }
+        
+        console.log('============================');
 
         toast({
           title: "EVIDENCE SUBMITTED",

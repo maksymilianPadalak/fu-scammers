@@ -1,5 +1,6 @@
 import type { Request, Response } from 'express';
 import { processVideoUpload } from '../services/video';
+import { extractFirstFrameAndAnalyze } from '../services/frameAnalysis';
 import fs from 'fs';
 
 interface VideoUploadRequest extends Request {
@@ -50,14 +51,23 @@ export const uploadVideo = async (req: VideoUploadRequest, res: Response) => {
       });
     }
 
-    // Prepare successful response
+    // Extract first frame and analyze for AI-generated content
+    console.log('Starting AI-generated video detection...')
+    const frameAnalysis = await extractFirstFrameAndAnalyze(req.file.path)
+    
+    // Prepare successful response with frame analysis
     const responseData = {
       success: true,
-      message: 'Video uploaded and processed successfully',
+      message: 'Video uploaded, processed, and analyzed successfully',
       data: {
         metadata: result.metadata,
         uploadedAt: new Date().toISOString(),
         filePath: req.file.path,
+        frameAnalysis: {
+          success: frameAnalysis.success,
+          analysis: frameAnalysis.analysis,
+          error: frameAnalysis.error
+        }
       },
     };
 
