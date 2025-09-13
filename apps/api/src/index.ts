@@ -4,6 +4,7 @@ import cors from 'cors';
 import { healthRouter } from './routes/health'
 import { itemsRouter } from './routes/items'
 import { analyzeRouter } from './routes/analyze'
+import { videoRouter } from './routes/video'
 const app = express();
 const PORT = process.env.PORT || 3001;
 
@@ -21,6 +22,7 @@ app.use((req, res, next) => {
 app.use('/api', healthRouter)
 app.use('/api', itemsRouter)
 app.use('/api', analyzeRouter)
+app.use('/api', videoRouter)
 app.listen(PORT, () => {
   console.log(`🚀 API server running on http://localhost:${PORT}`);
 });

@@ -10,9 +10,11 @@
     "lint": "eslint src --ext .ts"
   },
   "dependencies": {
+    "@types/multer": "^2.0.0",
     "cors": "^2.8.5",
     "dotenv": "^17.2.2",
     "express": "^5.0.0",
+    "multer": "^2.0.2",
     "openai": "^5.20.2"
   },
   "devDependencies": {

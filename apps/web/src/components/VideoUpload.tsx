@@ -9,6 +9,8 @@ const VideoUpload = () => {
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [isDragging, setIsDragging] = useState(false);
   const [scammerInfo, setScammerInfo] = useState("");
+  const [isUploading, setIsUploading] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState(0);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const { toast } = useToast();
 
@@ -61,7 +63,7 @@ const VideoUpload = () => {
     }
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
     if (!selectedFile) {
@@ -73,17 +75,101 @@ const VideoUpload = () => {
       return;
     }
 
-    // Simulate upload
-    toast({
-      title: "EVIDENCE SUBMITTED",
-      description: "Your video has been uploaded successfully. Thank you for fighting scammers!",
-    });
+    if (!scammerInfo.trim()) {
+      toast({
+        title: "MISSING INFORMATION",
+        description: "Please provide scammer information.",
+        variant: "destructive",
+      });
+      return;
+    }
 
-    // Reset form
-    setSelectedFile(null);
-    setScammerInfo("");
-    if (fileInputRef.current) {
-      fileInputRef.current.value = "";
+    setIsUploading(true);
+    setUploadProgress(0);
+
+    try {
+      // Create FormData for file upload
+      const formData = new FormData();
+      formData.append('video', selectedFile);
+      formData.append('description', scammerInfo.trim());
+
+      console.log('Uploading video:', {
+        filename: selectedFile.name,
+        size: selectedFile.size,
+        type: selectedFile.type,
+        description: scammerInfo.trim()
+      });
+
+      // Simulate progress for user feedback
+      const progressInterval = setInterval(() => {
+        setUploadProgress(prev => {
+          if (prev >= 90) {
+            clearInterval(progressInterval);
+            return 90;
+          }
+          return prev + 10;
+        });
+      }, 200);
+
+      // Upload to backend
+      const response = await fetch('http://localhost:3001/api/upload-video', {
+        method: 'POST',
+        body: formData,
+      });
+
+      clearInterval(progressInterval);
+      setUploadProgress(100);
+
+      const result = await response.json();
+
+      if (!response.ok) {
+        throw new Error(result.error || 'Upload failed');
+      }
+
+      if (result.success) {
+        // Log metadata to console as requested
+        console.log('=== VIDEO UPLOAD SUCCESS ===');
+        console.log('Response:', result);
+        console.log('Video Metadata:', result.data?.metadata);
+        console.log('File Path:', result.data?.filePath);
+        console.log('Upload Timestamp:', result.data?.uploadedAt);
+        console.log('==========================');
+
+        toast({
+          title: "EVIDENCE SUBMITTED",
+          description: `Your video "${selectedFile.name}" has been uploaded successfully. Thank you for fighting scammers!`,
+        });
+
+        // Reset form
+        setSelectedFile(null);
+        setScammerInfo("");
+        if (fileInputRef.current) {
+          fileInputRef.current.value = "";
+        }
+      } else {
+        throw new Error(result.error || 'Upload failed');
+      }
+    } catch (error) {
+      console.error('Upload error:', error);
+      
+      let errorMessage = "Failed to upload video. Please try again.";
+      
+      if (error instanceof Error) {
+        if (error.message.includes('fetch')) {
+          errorMessage = "Cannot connect to server. Please make sure the API server is running on port 3001.";
+        } else {
+          errorMessage = error.message;
+        }
+      }
+      
+      toast({
+        title: "UPLOAD FAILED",
+        description: errorMessage,
+        variant: "destructive",
+      });
+    } finally {
+      setIsUploading(false);
+      setUploadProgress(0);
     }
   };
 
@@ -112,16 +198,18 @@ const VideoUpload = () => {
             <Label className="font-mono font-bold text-sm">VIDEO FILE*</Label>
             <div
               className={`
-                border-2 border-dashed p-6 md:p-8 text-center cursor-pointer transition-colors touch-manipulation
-                ${isDragging 
-                  ? 'border-accent bg-accent/5' 
-                  : 'border-foreground hover:border-accent hover:bg-accent/5'
+                border-2 border-dashed p-6 md:p-8 text-center transition-colors touch-manipulation
+                ${isUploading 
+                  ? 'border-muted bg-muted/20 cursor-not-allowed' 
+                  : isDragging 
+                    ? 'border-accent bg-accent/5 cursor-pointer' 
+                    : 'border-foreground hover:border-accent hover:bg-accent/5 cursor-pointer'
                 }
               `}
-              onDragOver={handleDragOver}
-              onDragLeave={handleDragLeave}
-              onDrop={handleDrop}
-              onClick={() => fileInputRef.current?.click()}
+              onDragOver={isUploading ? undefined : handleDragOver}
+              onDragLeave={isUploading ? undefined : handleDragLeave}
+              onDrop={isUploading ? undefined : handleDrop}
+              onClick={isUploading ? undefined : () => fileInputRef.current?.click()}
             >
               <div className="space-y-3 md:space-y-4">
                 {selectedFile ? (
@@ -135,9 +223,23 @@ const VideoUpload = () => {
                         {formatFileSize(selectedFile.size)}
                       </p>
                     </div>
-                    <p className="font-mono text-sm text-accent">
-                      ✓ FILE READY FOR UPLOAD
-                    </p>
+                    {isUploading ? (
+                      <div className="space-y-2">
+                        <p className="font-mono text-sm text-accent">
+                          🚀 UPLOADING... {uploadProgress}%
+                        </p>
+                        <div className="w-full bg-muted rounded-full h-2">
+                          <div 
+                            className="bg-accent h-2 rounded-full transition-all duration-300"
+                            style={{ width: `${uploadProgress}%` }}
+                          ></div>
+                        </div>
+                      </div>
+                    ) : (
+                      <p className="font-mono text-sm text-accent">
+                        ✓ FILE READY FOR UPLOAD
+                      </p>
+                    )}
                   </>
                 ) : (
                   <>
@@ -150,7 +252,7 @@ const VideoUpload = () => {
                         or drag & drop
                       </p>
                       <div className="space-y-1 text-xs font-mono text-muted-foreground">
-                        <p>Supported: MP4, AVI, MOV, WMV</p>
+                        <p>Supported: MP4, AVI, MOV, WMV, WebM, MKV</p>
                         <p>Max size: 100MB</p>
                       </div>
                     </div>
@@ -190,11 +292,13 @@ const VideoUpload = () => {
             <Button
               type="submit"
               className="w-full btn-brutal text-base md:text-lg py-4 font-mono font-bold touch-manipulation"
-              disabled={!selectedFile || !scammerInfo.trim()}
+              disabled={!selectedFile || !scammerInfo.trim() || isUploading}
             >
-              {selectedFile && scammerInfo.trim() 
-                ? "SUBMIT EVIDENCE" 
-                : "COMPLETE REQUIRED FIELDS"
+              {isUploading
+                ? `UPLOADING... ${uploadProgress}%`
+                : selectedFile && scammerInfo.trim() 
+                  ? "SUBMIT EVIDENCE" 
+                  : "COMPLETE REQUIRED FIELDS"
               }
             </Button>
           </div>
