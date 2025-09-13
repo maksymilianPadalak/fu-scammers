@@ -1,0 +1,25 @@
+{
+  "name": "@turbo-browser-extension/browser-extension",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "vite build && cp src/manifest.json dist/",
+    "dev": "vite build --watch",
+    "type-check": "tsc --noEmit"
+  },
+  "dependencies": {
+    "react": "19.1.0",
+    "react-dom": "19.1.0"
+  },
+  "devDependencies": {
+    "@types/chrome": "^0.0.243",
+    "@types/node": "^20.5.0",
+    "@types/react": "^18.3.3",
+    "@types/react-dom": "^18.3.0",
+    "@vitejs/plugin-react": "^4.0.4",
+    "typescript": "^5.2.2",
+    "vite": "^4.4.9",
+    "@crxjs/vite-plugin": "^2.0.0-beta.19"
+  }
+}

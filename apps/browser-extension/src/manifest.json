@@ -1,0 +1,23 @@
+{
+  "manifest_version": 3,
+  "name": "Turbo Browser Extension",
+  "version": "1.0.0",
+  "description": "A minimal browser extension built with Turbo repo",
+  "permissions": [
+    "activeTab",
+    "storage"
+  ],
+  "action": {
+    "default_popup": "popup.html",
+    "default_title": "Turbo Extension"
+  },
+  "content_scripts": [
+    {
+      "matches": ["<all_urls>"],
+      "js": ["content.js"]
+    }
+  ],
+  "background": {
+    "service_worker": "background.js"
+  }
+}

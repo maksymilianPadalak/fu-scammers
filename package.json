@@ -1,0 +1,19 @@
+{
+  "name": "turbo-browser-extension",
+  "private": true,
+  "scripts": {
+    "build": "turbo run build",
+    "dev": "turbo run dev",
+    "dev:fast": "turbo run dev --parallel",
+    "lint": "turbo run lint",
+    "type-check": "turbo run type-check"
+  },
+  "devDependencies": {
+    "turbo": "^1.10.16",
+    "typescript": "^5.2.2"
+  },
+  "packageManager": "pnpm@8.7.4",
+  "workspaces": [
+    "apps/*"
+  ]
+}
