@@ -11,6 +11,7 @@ import { recordingRouter } from './routes/recording'
 // import { weaviateRouter } from './routes/weaviate'
 import { fineTuneRouter } from './routes/fineTune'
 import { setupWebSocket } from './ws'
+import { ensureVideosClass } from './services/weaviate'
 
 const app = express();
 const PORT = process.env.PORT || 3001;
@@ -38,10 +39,22 @@ app.use('/api', recordingRouter)
 app.use('/api', fineTuneRouter)
 // Create HTTP server and start servers
 const server = createServer(app);
+
+// Increase HTTP server timeouts to allow long-running video analysis
+server.setTimeout(10 * 60 * 1000); // 10 minutes for inactive sockets
+// @ts-ignore - headersTimeout exists on Node http.Server
+server.headersTimeout = 11 * 60 * 1000; // allow headers for long requests
+// @ts-ignore - keepAliveTimeout exists on Node http.Server
+server.keepAliveTimeout = 10 * 60 * 1000; // keep alive during long processing
+
 // Start WebSocket server on its own port for clarity
 setupWebSocket(server, { port: WS_PORT });
 
-server.listen(PORT, () => {
+server.listen(PORT, async () => {
   console.log(`🚀 API server running on http://localhost:${PORT}`);
   console.log(`🔌 WebSocket server at ws://localhost:${WS_PORT}/ws`);
+  
+  // Initialize Weaviate Videos class
+  console.log('Initializing Weaviate...');
+  await ensureVideosClass();
 });

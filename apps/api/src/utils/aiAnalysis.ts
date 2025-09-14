@@ -43,14 +43,13 @@ export async function analyzeFrameWithOpenAI(
     throw new Error(`Audio file is empty: ${audioPath}`);
 
   const audioResponse = await openai.audio.transcriptions.create({
-    model: 'gpt-4o-transcribe',
+    model: 'whisper-1',
     response_format: 'json',
-    include: ['logprobs'],
     file: fs.createReadStream(audioPath),
   });
 
   const resp = await openai.responses.create({
-    model: 'gpt-5',
+    model: 'gpt-4o',
     input: [
       {
         role: 'system',

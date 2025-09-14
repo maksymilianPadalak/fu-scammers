@@ -35,7 +35,13 @@ export const extractAndAnalyze = async (
   try {
     if (!frames) throw new Error('No frame extracted to analyze');
 
-    const analysis = await analyzeFrameWithOpenAI(frames, audioPath);
+    // Sample up to 10 frames evenly across the video to avoid huge payloads
+    const MAX_FRAMES = 10;
+    const sampledFrames = frames.length <= MAX_FRAMES
+      ? frames
+      : Array.from({ length: MAX_FRAMES }, (_, i) => frames[Math.floor((i * frames.length) / MAX_FRAMES)]);
+
+    const analysis = await analyzeFrameWithOpenAI(sampledFrames, audioPath);
 
     return {
       success: true,

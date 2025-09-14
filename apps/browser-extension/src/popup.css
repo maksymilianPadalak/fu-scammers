@@ -224,6 +224,94 @@ body {
   box-shadow: 3px 3px 0px var(--foreground);
 }
 
+.weaviate-status {
+  font-weight: 900;
+  font-family: 'Courier New', monospace;
+  padding: 0.5rem 1rem;
+  margin-top: 0.5rem;
+  display: inline-block;
+  text-transform: uppercase;
+  letter-spacing: 0.025em;
+  border: 3px solid;
+  box-shadow: 3px 3px 0px;
+}
+
+.weaviate-status.flagged {
+  background: var(--accent);
+  color: var(--accent-foreground);
+  border-color: var(--accent);
+  box-shadow: 3px 3px 0px var(--accent);
+  animation: brutal-pulse 2s ease-in-out infinite alternate;
+}
+
+.weaviate-status.not-flagged {
+  background: var(--background);
+  color: var(--muted-foreground);
+  border-color: var(--muted-foreground);
+  box-shadow: 3px 3px 0px var(--muted-foreground);
+}
+
+.decision-badge {
+  font-weight: 900;
+  font-family: 'Courier New', monospace;
+  padding: 0.5rem 1rem;
+  margin-top: 0.5rem;
+  display: inline-block;
+  text-transform: uppercase;
+  letter-spacing: 0.025em;
+  border: 3px solid;
+  box-shadow: 3px 3px 0px;
+}
+
+.decision-ai_generated {
+  background: var(--accent);
+  color: var(--accent-foreground);
+  border-color: var(--accent);
+  box-shadow: 3px 3px 0px var(--accent);
+}
+
+.decision-camera_captured {
+  background: var(--background);
+  color: var(--foreground);
+  border-color: var(--foreground);
+  box-shadow: 3px 3px 0px var(--foreground);
+}
+
+.decision-uncertain {
+  background: var(--background);
+  color: var(--muted-foreground);
+  border-color: var(--muted-foreground);
+  box-shadow: 3px 3px 0px var(--muted-foreground);
+}
+
+.artifacts-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 0.5rem;
+  margin-top: 0.5rem;
+}
+
+.artifact-item {
+  font-family: 'Courier New', monospace;
+  font-size: 0.85rem;
+  padding: 0.25rem 0.5rem;
+  border: 2px solid;
+  text-transform: uppercase;
+  letter-spacing: 0.025em;
+}
+
+.artifact-item.detected {
+  background: var(--accent);
+  color: var(--accent-foreground);
+  border-color: var(--accent);
+}
+
+.artifact-item.not-detected {
+  background: var(--muted);
+  color: var(--muted-foreground);
+  border-color: var(--muted-foreground);
+}
+
 .status {
   margin-top: 1.5rem;
   padding: 1.5rem;

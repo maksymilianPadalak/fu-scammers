@@ -8,8 +8,24 @@ const Popup: React.FC = () => {
   const [isRecording, setIsRecording] = React.useState<boolean>(false);
   const [recordedFrames, setRecordedFrames] = React.useState<string[]>([]);
   const [recordingInterval, setRecordingInterval] = React.useState<NodeJS.Timeout | null>(null);
-  const [analysisResult, setAnalysisResult] = React.useState<{username: string, whatYouSee: string, reasoning: string, aiGeneratedLikelihood: number} | null>(null);
+  const [analysisResult, setAnalysisResult] = React.useState<{
+    username: string,
+    whatYouSee: string,
+    synthetic_likelihood: number,
+    decision: string,
+    artifacts: {
+      temporal_inconsistency: boolean;
+      edge_halos_or_seams: boolean;
+      finger_or_teeth_anomalies: boolean;
+      texture_or_pore_smoothing: boolean;
+      lighting_or_reflection_mismatch: boolean;
+      weird_text_or_logos: boolean;
+      motion_wobble_or_jelly_faces: boolean;
+    },
+    notes: string
+  } | null>(null);
   const [isAnalyzing, setIsAnalyzing] = React.useState<boolean>(false);
+  const [weaviateStatus, setWeaviateStatus] = React.useState<{stored: boolean, reason: string} | null>(null);
 
 
   const startScreenRecording = async () => {
@@ -29,6 +45,7 @@ const Popup: React.FC = () => {
       // Clear any existing frames and analysis
       setRecordedFrames([]);
       setAnalysisResult(null);
+      setWeaviateStatus(null);
       setIsRecording(true);
       
       // Capture first frame immediately
@@ -38,7 +55,7 @@ const Popup: React.FC = () => {
       });
       setRecordedFrames([firstFrame]);
       
-      // Set up interval to capture frames at 2 FPS (every 500ms)
+      // Set up interval to capture frames at 10 FPS (every 100ms)
       const interval = setInterval(async () => {
         try {
           const frameData = await chrome.tabs.captureVisibleTab(tab.windowId, {
@@ -50,10 +67,10 @@ const Popup: React.FC = () => {
         } catch (error) {
           console.error('Error capturing frame:', error);
         }
-      }, 500); // 2 FPS = 500ms interval
+      }, 100); // 10 FPS = 100ms interval
       
       setRecordingInterval(interval);
-      setStatus('🎬 Recording started! Capturing at 2 FPS...');
+      setStatus('🎬 Recording started! Capturing at 10 FPS...');
       
     } catch (error) {
       setStatus(
@@ -108,7 +125,7 @@ const Popup: React.FC = () => {
         body: JSON.stringify({
           frames: recordedFrames,
           frameCount: recordedFrames.length,
-          fps: 2,
+          fps: 10,
           timestamp: new Date().toISOString(),
           source: 'browser_extension'
         })
@@ -123,7 +140,24 @@ const Popup: React.FC = () => {
       // Store the analysis result if available
       if (data.analysis) {
         setAnalysisResult(data.analysis);
-        setStatus(`✅ Recording analyzed! AI detected: ${Math.round(data.analysis.aiGeneratedLikelihood * 100)}% likelihood`);
+        
+        // Store Weaviate status if available
+        if (data.weaviate) {
+          setWeaviateStatus(data.weaviate);
+        }
+        
+        let statusMessage = `✅ Recording analyzed! AI detected: ${Math.round(data.analysis.synthetic_likelihood * 100)}% likelihood`;
+        
+        // Add Weaviate storage information if available
+        if (data.weaviate) {
+          if (data.weaviate.stored) {
+            statusMessage += ` 🚨 Username flagged and stored in database!`;
+          } else if (data.analysis.synthetic_likelihood > 0.5) {
+            statusMessage += ` ⚠️ Above threshold but username unknown`;
+          }
+        }
+        
+        setStatus(statusMessage);
       } else {
         setStatus(`✅ Recording sent successfully! Session ID: ${data.sessionId}`);
       }
@@ -160,7 +194,7 @@ const Popup: React.FC = () => {
           onClick={startScreenRecording}
           disabled={isLoading}
         >
-          Start Recording 🎬 (2 FPS)
+          Start Recording 🎬 (10 FPS)
         </button>
       ) : (
         <button
@@ -219,14 +253,39 @@ const Popup: React.FC = () => {
             <strong>What I See:</strong> {analysisResult.whatYouSee}
           </div>
           <div className="analysis-item">
-            <strong>Reasoning:</strong> {analysisResult.reasoning}
+            <strong>Decision:</strong> 
+            <span className={`decision-badge decision-${analysisResult.decision}`}>
+              {analysisResult.decision.replace('_', ' ').toUpperCase()}
+            </span>
           </div>
           <div className="analysis-item">
             <strong>AI Generated Likelihood:</strong> 
-            <span className={`likelihood-score likelihood-${Math.round(analysisResult.aiGeneratedLikelihood * 100) > 50 ? 'high' : 'low'}`}>
-              {Math.round(analysisResult.aiGeneratedLikelihood * 100)}%
+            <span className={`likelihood-score likelihood-${Math.round(analysisResult.synthetic_likelihood * 100) > 50 ? 'high' : 'low'}`}>
+              {Math.round(analysisResult.synthetic_likelihood * 100)}%
             </span>
           </div>
+          <div className="analysis-item">
+            <strong>Detected Artifacts:</strong>
+            <div className="artifacts-grid">
+              {Object.entries(analysisResult.artifacts).map(([key, value]) => (
+                <div key={key} className={`artifact-item ${value ? 'detected' : 'not-detected'}`}>
+                  {value ? '✓' : '✗'} {key.replace(/_/g, ' ')}
+                </div>
+              ))}
+            </div>
+          </div>
+          <div className="analysis-item">
+            <strong>Notes:</strong> {analysisResult.notes}
+          </div>
+          
+          {weaviateStatus && (
+            <div className="analysis-item">
+              <strong>Database Status:</strong>
+              <span className={`weaviate-status ${weaviateStatus.stored ? 'flagged' : 'not-flagged'}`}>
+                {weaviateStatus.stored ? '🚨 FLAGGED & STORED' : `⚠️ ${weaviateStatus.reason.toUpperCase()}`}
+              </span>
+            </div>
+          )}
         </div>
       )}
 

@@ -2,6 +2,10 @@ import type { Request, Response } from 'express';
 import fs from 'fs';
 import path from 'path';
 import OpenAI from 'openai';
+import {
+  ensureVideosClass,
+  storeAIDetectedUsername,
+} from '../services/weaviate';
 
 // Utility function to safely remove a directory and its contents
 function safeRemoveDirectory(dirPath: string): void {
@@ -18,55 +22,45 @@ function safeRemoveDirectory(dirPath: string): void {
 // Initialize OpenAI client
 const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 
-const RECORDING_ANALYSIS_PROMPT = `You are a forensic AI content analyst. Analyze the provided screenshot frames and tell me what you see and whether the content appears to be AI-generated.
+const FORENSIC_SYSTEM_PROMPT = `You are a forensic AI content analyst. Analyze the provided screenshot frames for signs of AI generation or camera capture.
 
-Follow these analysis rules:
-- Look for WATERMARK: if the watermark is from AI company then you can stop research and return 1 for likelihood
-- Look for FRAME-LEVEL ARTIFACTS:
-  • extra or missing fingers, warped hands
-  - extra limbs
-  - not natural environment 
-  • irregular teeth, asymmetrical or glassy eyes
-  • gibberish or warped text/logos
-  • inconsistent lighting, shadows, reflections
-  • waxy or overly smooth skin, warped backgrounds
-- Look for TEMPORAL ARTIFACTS across frames:
-  • flickering textures, inconsistent details
-  • facial features that morph or jitter
-  • continuity errors (hair, beards, accessories popping in/out)
-  • unnatural or robotic motion
-  • inconsistent or missing motion blur
-- Look for AUDIO ARTIFACTS (if applicable):
-  • flat or robotic prosody
-  • missing breaths or unnatural pauses
-  • overly clear or stilted pronunciation
-  • mismatched background ambience
-  • digital glitches or looping noise
-- Be CONSERVATIVE: only assign a high AI likelihood if multiple strong signs are present across modalities
-- If evidence is weak or ambiguous, return a low likelihood and explain why it seems authentic
-- Always return STRICT JSON, no prose outside it
+Focus on these specific artifacts:
+- TEMPORAL_INCONSISTENCY: Flickering textures, facial features that morph between frames, continuity errors
+- EDGE_HALOS_OR_SEAMS: Unnatural edges, halos around objects, visible seams from compositing
+- FINGER_OR_TEETH_ANOMALIES: Extra/missing fingers, warped hands, irregular teeth, asymmetrical eyes
+- TEXTURE_OR_PORE_SMOOTHING: Waxy skin, overly smooth textures, missing skin pores
+- LIGHTING_OR_REFLECTION_MISMATCH: Inconsistent lighting, impossible shadows, wrong reflections
+- WEIRD_TEXT_OR_LOGOS: Gibberish text, warped logos, impossible writing
+- MOTION_WOBBLE_OR_JELLY_FACES: Unnatural facial motion, wobbling features, jelly-like deformation
 
-IMPORTANT: You must respond with ONLY valid JSON. No markdown, no explanations, just the JSON object.
-
-Return your analysis as strict JSON with this exact schema:
-{
-  "username": "string - if you can identify a username or handle in the content, otherwise unknown",
-  "whatYouSee": "string - describe what you observe in the screenshots",
-  "reasoning": "string - explain your analysis and what evidence you found",
-  "aiGeneratedLikelihood": float with 0.01 step
-}
-
-aiGeneratedLikelihood should be a number between 0.0 and 1.0 based on the strength of evidence found.`;
+Be conservative - only flag as AI-generated with high confidence if multiple strong artifacts are present.`;
 
 async function analyzeFramesWithOpenAI(frames: string[]): Promise<{
   username: string;
   whatYouSee: string;
-  reasoning: string;
-  aiGeneratedLikelihood: number;
+  synthetic_likelihood: number;
+  decision: string;
+  artifacts: {
+    temporal_inconsistency: boolean;
+    edge_halos_or_seams: boolean;
+    finger_or_teeth_anomalies: boolean;
+    texture_or_pore_smoothing: boolean;
+    lighting_or_reflection_mismatch: boolean;
+    weird_text_or_logos: boolean;
+    motion_wobble_or_jelly_faces: boolean;
+  };
+  notes: string;
 }> {
   try {
-    // Take up to 3 frames for analysis to avoid token limits
-    const framesToAnalyze = frames.slice(0, 3);
+    // Randomly select up to 10 frames from the entire array for analysis
+    const framesToAnalyze =
+      frames.length <= 6
+        ? frames
+        : frames
+            .map((frame, index) => ({ frame, index, sort: Math.random() }))
+            .sort((a, b) => a.sort - b.sort)
+            .slice(0, 6)
+            .map(item => item.frame);
 
     const imageContent = framesToAnalyze.map(frameBase64 => ({
       type: 'image_url' as const,
@@ -76,25 +70,45 @@ async function analyzeFramesWithOpenAI(frames: string[]): Promise<{
       },
     }));
 
+    const systemPrompt = FORENSIC_SYSTEM_PROMPT + `\n\nReturn your analysis as strict JSON with this exact schema:
+{
+  "username": "string - Username or handle visible in content, or 'unknown'",
+  "whatYouSee": "string - Description of what is observed in the frames",
+  "synthetic_likelihood": "number - Likelihood of AI generation (0.0 - 1.0)",
+  "decision": "string - One of: ai_generated, camera_captured, uncertain",
+  "artifacts": {
+    "temporal_inconsistency": boolean,
+    "edge_halos_or_seams": boolean,
+    "finger_or_teeth_anomalies": boolean,
+    "texture_or_pore_smoothing": boolean,
+    "lighting_or_reflection_mismatch": boolean,
+    "weird_text_or_logos": boolean,
+    "motion_wobble_or_jelly_faces": boolean
+  },
+  "notes": "string - Brief notes on the analysis (max 200 chars)"
+}`;
+
     const response = await openai.chat.completions.create({
-      model: 'gpt-5',
+      model: 'gpt-4o',
       messages: [
         {
           role: 'system',
-          content: RECORDING_ANALYSIS_PROMPT,
+          content: systemPrompt,
         },
         {
           role: 'user',
           content: [
             {
               type: 'text',
-              text: `Please analyze these ${framesToAnalyze.length} screenshot frames:`,
+              text: `Analyze these ${framesToAnalyze.length} screenshot frames for AI artifacts:`,
             },
             ...imageContent,
           ],
         },
       ],
-      response_format: { type: 'json_object' },
+      max_tokens: 1500,
+      temperature: 0.1,
+      response_format: { type: 'json_object' }
     });
 
     const analysisText = response.choices[0]?.message?.content;
@@ -102,59 +116,52 @@ async function analyzeFramesWithOpenAI(frames: string[]): Promise<{
       throw new Error('No analysis received from OpenAI');
     }
 
-    console.log('OpenAI raw response:', analysisText);
+    console.log('OpenAI response:', analysisText);
+    const analysisResult = JSON.parse(analysisText);
 
-    // Try to extract JSON from the response (sometimes it's wrapped in markdown)
-    let cleanedText = analysisText.trim();
-
-    // Remove markdown code blocks if present
-    if (cleanedText.startsWith('```json')) {
-      cleanedText = cleanedText
-        .replace(/^```json\s*/, '')
-        .replace(/\s*```$/, '');
-    } else if (cleanedText.startsWith('```')) {
-      cleanedText = cleanedText.replace(/^```\s*/, '').replace(/\s*```$/, '');
-    }
-
-    // Parse the JSON response
-    try {
-      const analysis = JSON.parse(cleanedText);
-      console.log('Parsed analysis:', analysis);
-
-      return {
-        username: analysis.username || 'unknown',
-        whatYouSee: analysis.whatYouSee || 'Unable to analyze content',
-        reasoning: analysis.reasoning || 'No reasoning provided',
-        aiGeneratedLikelihood: Math.max(
-          0,
-          Math.min(1, parseFloat(analysis.aiGeneratedLikelihood) || 0)
-        ),
-      };
-    } catch (parseError) {
-      console.error('Failed to parse OpenAI response as JSON:', cleanedText);
-      console.error('Parse error:', parseError);
-
-      // Try to extract information manually if JSON parsing fails
-      const fallbackAnalysis = {
-        username: 'unknown',
-        whatYouSee:
-          analysisText.length > 200
-            ? analysisText.substring(0, 200) + '...'
-            : analysisText,
-        reasoning: 'JSON parsing failed, using fallback analysis',
-        aiGeneratedLikelihood: 0,
-      };
-
-      console.log('Using fallback analysis:', fallbackAnalysis);
-      return fallbackAnalysis;
-    }
+    return {
+      username: analysisResult.username || 'unknown',
+      whatYouSee: analysisResult.whatYouSee || 'Unable to analyze content',
+      synthetic_likelihood: Math.max(
+        0,
+        Math.min(1, analysisResult.synthetic_likelihood || 0)
+      ),
+      decision: analysisResult.decision || 'uncertain',
+      artifacts: {
+        temporal_inconsistency:
+          analysisResult.artifacts?.temporal_inconsistency || false,
+        edge_halos_or_seams:
+          analysisResult.artifacts?.edge_halos_or_seams || false,
+        finger_or_teeth_anomalies:
+          analysisResult.artifacts?.finger_or_teeth_anomalies || false,
+        texture_or_pore_smoothing:
+          analysisResult.artifacts?.texture_or_pore_smoothing || false,
+        lighting_or_reflection_mismatch:
+          analysisResult.artifacts?.lighting_or_reflection_mismatch || false,
+        weird_text_or_logos:
+          analysisResult.artifacts?.weird_text_or_logos || false,
+        motion_wobble_or_jelly_faces:
+          analysisResult.artifacts?.motion_wobble_or_jelly_faces || false,
+      },
+      notes: analysisResult.notes || 'No additional notes',
+    };
   } catch (error) {
     console.error('OpenAI analysis error:', error);
     return {
       username: 'unknown',
       whatYouSee: 'Analysis failed due to API error',
-      reasoning: 'OpenAI API call failed',
-      aiGeneratedLikelihood: 0,
+      synthetic_likelihood: 0,
+      decision: 'uncertain',
+      artifacts: {
+        temporal_inconsistency: false,
+        edge_halos_or_seams: false,
+        finger_or_teeth_anomalies: false,
+        texture_or_pore_smoothing: false,
+        lighting_or_reflection_mismatch: false,
+        weird_text_or_logos: false,
+        motion_wobble_or_jelly_faces: false,
+      },
+      notes: 'OpenAI API call failed',
     };
   }
 }
@@ -211,8 +218,8 @@ export const handleRecording = async (req: Request, res: Response) => {
     const metadata = {
       sessionId,
       frameCount: frames.length,
-      fps: fps || 2,
-      duration: frames.length / (fps || 2),
+      fps: fps || 10,
+      duration: frames.length / (fps || 10),
       timestamp: timestamp || new Date().toISOString(),
       source: source || 'unknown',
       frames: savedFrames,
@@ -232,6 +239,41 @@ export const handleRecording = async (req: Request, res: Response) => {
     const analysis = await analyzeFramesWithOpenAI(frames);
     console.log('AI analysis completed:', analysis);
 
+    // Store in Weaviate if AI likelihood > 50% and username is not 'unknown'
+    let weaviateStored = false;
+    if (
+      analysis.synthetic_likelihood > 0.5 &&
+      analysis.username !== 'unknown'
+    ) {
+      console.log(
+        `AI likelihood above threshold detected (${Math.round(analysis.synthetic_likelihood * 100)}%), storing in Weaviate...`
+      );
+
+      try {
+        // Ensure the Videos class exists
+        await ensureVideosClass();
+
+        // Store the detection
+        const weaviateResult = await storeAIDetectedUsername({
+          username: analysis.username,
+          aiGeneratedLikelihood: analysis.synthetic_likelihood,
+          whatYouSee: analysis.whatYouSee,
+          reasoning: analysis.notes,
+          sessionId,
+          timestamp: metadata.timestamp,
+        });
+
+        if (weaviateResult.success) {
+          weaviateStored = true;
+          console.log('Successfully stored flagged username in Weaviate');
+        } else {
+          console.error('Failed to store in Weaviate:', weaviateResult.error);
+        }
+      } catch (weaviateError) {
+        console.error('Error during Weaviate storage:', weaviateError);
+      }
+    }
+
     const response = {
       success: true,
       message: 'Recording received, saved, and analyzed',
@@ -244,8 +286,18 @@ export const handleRecording = async (req: Request, res: Response) => {
       analysis: {
         username: analysis.username,
         whatYouSee: analysis.whatYouSee,
-        reasoning: analysis.reasoning,
-        aiGeneratedLikelihood: analysis.aiGeneratedLikelihood,
+        synthetic_likelihood: analysis.synthetic_likelihood,
+        decision: analysis.decision,
+        artifacts: analysis.artifacts,
+        notes: analysis.notes,
+      },
+      weaviate: {
+        stored: weaviateStored,
+        reason: weaviateStored
+          ? 'AI likelihood above threshold detected'
+          : analysis.synthetic_likelihood > 0.5
+            ? 'Username unknown'
+            : 'Low AI likelihood',
       },
     };
 

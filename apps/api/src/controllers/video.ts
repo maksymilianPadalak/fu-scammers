@@ -63,9 +63,15 @@ export const uploadVideo = async (req: VideoUploadRequest, res: Response) => {
       await cleanupVideoFile(req.file.path);
       await cleanupExtractedFrames(req.file.path);
       
+      // Return more actionable error to the client
       return res.status(502).json({
         success: false,
         error: frameAnalysis.error || 'AI analysis failed',
+        hint: 'This often happens when FFmpeg cannot extract frames or the OpenAI call fails/limits are exceeded. Try a shorter clip or smaller resolution.',
+        limits: {
+          uploadLimitMB: 500,
+          requestTimeoutMinutes: 10
+        }
       });
     }
 
