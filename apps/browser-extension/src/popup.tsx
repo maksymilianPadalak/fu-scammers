@@ -9,6 +9,8 @@ const Popup: React.FC = () => {
   const [isRecording, setIsRecording] = React.useState<boolean>(false);
   const [recordedFrames, setRecordedFrames] = React.useState<string[]>([]);
   const [recordingInterval, setRecordingInterval] = React.useState<NodeJS.Timeout | null>(null);
+  const [analysisResult, setAnalysisResult] = React.useState<{username: string, whatYouSee: string, aiGeneratedLikelihood: number} | null>(null);
+  const [isAnalyzing, setIsAnalyzing] = React.useState<boolean>(false);
 
   const fetchApiData = async () => {
     try {
@@ -139,8 +141,9 @@ const Popup: React.FC = () => {
         throw new Error('No active tab found');
       }
 
-      // Clear any existing frames
+      // Clear any existing frames and analysis
       setRecordedFrames([]);
+      setAnalysisResult(null);
       setIsRecording(true);
       
       // Capture first frame immediately
@@ -209,7 +212,8 @@ const Popup: React.FC = () => {
 
     try {
       setIsLoading(true);
-      setStatus('Sending recording to API...');
+      setIsAnalyzing(true);
+      setStatus('Sending recording to API and analyzing with AI...');
 
       const response = await fetch('http://localhost:3001/api/recording', {
         method: 'POST',
@@ -230,7 +234,14 @@ const Popup: React.FC = () => {
       }
 
       const data = await response.json();
-      setStatus(`✅ Recording sent to API successfully! Response: ${JSON.stringify(data)}`);
+      
+      // Store the analysis result if available
+      if (data.analysis) {
+        setAnalysisResult(data.analysis);
+        setStatus(`✅ Recording analyzed! AI detected: ${Math.round(data.analysis.aiGeneratedLikelihood * 100)}% likelihood`);
+      } else {
+        setStatus(`✅ Recording sent successfully! Session ID: ${data.sessionId}`);
+      }
     } catch (error) {
       setStatus(
         `Error: ${error instanceof Error ? error.message : 'Unknown error'}`
@@ -238,6 +249,7 @@ const Popup: React.FC = () => {
       console.error('API send error:', error);
     } finally {
       setIsLoading(false);
+      setIsAnalyzing(false);
     }
   };
 
@@ -311,7 +323,11 @@ const Popup: React.FC = () => {
           onClick={sendRecordingToApi}
           disabled={isLoading}
         >
-          Send Recording to API 🎥 ({recordedFrames.length} frames)
+          {isAnalyzing ? (
+            <>🤖 Analyzing with AI... ({recordedFrames.length} frames)</>
+          ) : (
+            <>Send Recording to API 🎥 ({recordedFrames.length} frames)</>
+          )}
         </button>
       )}
 
@@ -351,6 +367,24 @@ const Popup: React.FC = () => {
               marginTop: '10px'
             }}
           />
+        </div>
+      )}
+
+      {analysisResult && (
+        <div className="analysis-results">
+          <h4>AI Analysis Results:</h4>
+          <div className="analysis-item">
+            <strong>Username:</strong> {analysisResult.username}
+          </div>
+          <div className="analysis-item">
+            <strong>What I See:</strong> {analysisResult.whatYouSee}
+          </div>
+          <div className="analysis-item">
+            <strong>AI Generated Likelihood:</strong> 
+            <span className={`likelihood-score likelihood-${Math.round(analysisResult.aiGeneratedLikelihood * 100) > 50 ? 'high' : 'low'}`}>
+              {Math.round(analysisResult.aiGeneratedLikelihood * 100)}%
+            </span>
+          </div>
         </div>
       )}
 
