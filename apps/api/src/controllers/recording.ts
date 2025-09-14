@@ -3,24 +3,60 @@ import fs from 'fs';
 import path from 'path';
 import OpenAI from 'openai';
 
+// Utility function to safely remove a directory and its contents
+function safeRemoveDirectory(dirPath: string): void {
+  try {
+    if (fs.existsSync(dirPath)) {
+      fs.rmSync(dirPath, { recursive: true, force: true });
+      console.log(`Cleaned up directory: ${dirPath}`);
+    }
+  } catch (error) {
+    console.error(`Failed to remove directory ${dirPath}:`, error);
+  }
+}
+
 // Initialize OpenAI client
 const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 
-const RECORDING_ANALYSIS_PROMPT = `You are an AI content analyst. Analyze the provided screenshot frames and tell me what you see and whether the content appears to be AI-generated.
+const RECORDING_ANALYSIS_PROMPT = `You are a forensic AI content analyst. Analyze the provided screenshot frames and tell me what you see and whether the content appears to be AI-generated.
 
-Return your analysis as strict JSON with this schema:
+Follow these analysis rules:
+- Look for WATERMARK: if the watermark is from AI company then you can stop research and return 1 for likelihood
+- Look for FRAME-LEVEL ARTIFACTS:
+  • extra or missing fingers, warped hands
+  - extra limbs
+  - not natural environment 
+  • irregular teeth, asymmetrical or glassy eyes
+  • gibberish or warped text/logos
+  • inconsistent lighting, shadows, reflections
+  • waxy or overly smooth skin, warped backgrounds
+- Look for TEMPORAL ARTIFACTS across frames:
+  • flickering textures, inconsistent details
+  • facial features that morph or jitter
+  • continuity errors (hair, beards, accessories popping in/out)
+  • unnatural or robotic motion
+  • inconsistent or missing motion blur
+- Look for AUDIO ARTIFACTS (if applicable):
+  • flat or robotic prosody
+  • missing breaths or unnatural pauses
+  • overly clear or stilted pronunciation
+  • mismatched background ambience
+  • digital glitches or looping noise
+- Be CONSERVATIVE: only assign a high AI likelihood if multiple strong signs are present across modalities
+- If evidence is weak or ambiguous, return a low likelihood and explain why it seems authentic
+- Always return STRICT JSON, no prose outside it
+
+IMPORTANT: You must respond with ONLY valid JSON. No markdown, no explanations, just the JSON object.
+
+Return your analysis as strict JSON with this exact schema:
 {
-  "username": "string - if you can identify a username or handle in the content, otherwise 'unknown'",
+  "username": "string - if you can identify a username or handle in the content, otherwise unknown",
   "whatYouSee": "string - describe what you observe in the screenshots",
-  "aiGeneratedLikelihood": "number between 0 and 1 - likelihood that the content is AI-generated"
+  "reasoning": "string - explain your analysis and what evidence you found",
+  "aiGeneratedLikelihood": float with 0.01 step
 }
 
-Look for signs of AI generation like:
-- Unnatural text or artifacts
-- Inconsistent visual elements
-- Too-perfect or synthetic appearance
-- Watermarks from AI tools
-- Unusual visual artifacts
+aiGeneratedLikelihood should be a number between 0.0 and 1.0 based on the strength of evidence found.`;
 
 async function analyzeFramesWithOpenAI(frames: string[]): Promise<{
   username: string;
@@ -41,7 +77,7 @@ async function analyzeFramesWithOpenAI(frames: string[]): Promise<{
     }));
 
     const response = await openai.chat.completions.create({
-      model: 'gpt-4o',
+      model: 'gpt-5',
       messages: [
         {
           role: 'system',
@@ -95,19 +131,30 @@ async function analyzeFramesWithOpenAI(frames: string[]): Promise<{
         ),
       };
     } catch (parseError) {
-      console.error('Failed to parse OpenAI response as JSON:', analysisText);
-      return {
+      console.error('Failed to parse OpenAI response as JSON:', cleanedText);
+      console.error('Parse error:', parseError);
+
+      // Try to extract information manually if JSON parsing fails
+      const fallbackAnalysis = {
         username: 'unknown',
-        whatYouSee: 'Analysis completed but format parsing failed',
-        aiGeneratedLikelihood: 0
+        whatYouSee:
+          analysisText.length > 200
+            ? analysisText.substring(0, 200) + '...'
+            : analysisText,
+        reasoning: 'JSON parsing failed, using fallback analysis',
+        aiGeneratedLikelihood: 0,
       };
+
+      console.log('Using fallback analysis:', fallbackAnalysis);
+      return fallbackAnalysis;
     }
   } catch (error) {
     console.error('OpenAI analysis error:', error);
     return {
       username: 'unknown',
       whatYouSee: 'Analysis failed due to API error',
-      aiGeneratedLikelihood: 0
+      reasoning: 'OpenAI API call failed',
+      aiGeneratedLikelihood: 0,
     };
   }
 }
@@ -117,13 +164,15 @@ export const handleRecording = async (req: Request, res: Response) => {
   console.log('Method:', req.method);
   console.log('Body keys:', Object.keys(req.body || {}));
 
+  let sessionDir: string | null = null;
+
   try {
     const { frames, frameCount, fps, timestamp, source } = req.body;
 
     if (!frames || !Array.isArray(frames) || frames.length === 0) {
       return res.status(400).json({
         success: false,
-        error: 'No frames data provided or invalid format'
+        error: 'No frames data provided or invalid format',
       });
     }
 
@@ -135,7 +184,7 @@ export const handleRecording = async (req: Request, res: Response) => {
 
     // Generate unique recording session ID
     const sessionId = `recording-${Date.now()}-${Math.round(Math.random() * 1000)}`;
-    const sessionDir = path.join(recordingsDir, sessionId);
+    sessionDir = path.join(recordingsDir, sessionId);
     fs.mkdirSync(sessionDir, { recursive: true });
 
     console.log(`Processing ${frames.length} frames for session ${sessionId}`);
@@ -144,15 +193,15 @@ export const handleRecording = async (req: Request, res: Response) => {
     const savedFrames: string[] = [];
     for (let i = 0; i < frames.length; i++) {
       const frame = frames[i];
-      
+
       // Extract base64 data from data URL
       const base64Data = frame.replace(/^data:image\/png;base64,/, '');
-      
+
       // Generate frame filename with zero-padded index
       const frameNumber = String(i + 1).padStart(4, '0');
       const filename = `frame-${frameNumber}.png`;
       const filepath = path.join(sessionDir, filename);
-      
+
       // Save the frame
       fs.writeFileSync(filepath, base64Data, 'base64');
       savedFrames.push(filename);
@@ -167,14 +216,16 @@ export const handleRecording = async (req: Request, res: Response) => {
       timestamp: timestamp || new Date().toISOString(),
       source: source || 'unknown',
       frames: savedFrames,
-      totalSize: frames.reduce((acc, frame) => acc + frame.length, 0)
+      totalSize: frames.reduce((acc, frame) => acc + frame.length, 0),
     };
 
     const metadataPath = path.join(sessionDir, 'metadata.json');
     fs.writeFileSync(metadataPath, JSON.stringify(metadata, null, 2));
 
     console.log(`Recording saved: ${sessionDir}`);
-    console.log(`Frames: ${savedFrames.length}, Duration: ${metadata.duration}s`);
+    console.log(
+      `Frames: ${savedFrames.length}, Duration: ${metadata.duration}s`
+    );
 
     // Perform AI analysis on the frames
     console.log('Starting AI analysis...');
@@ -193,18 +244,28 @@ export const handleRecording = async (req: Request, res: Response) => {
       analysis: {
         username: analysis.username,
         whatYouSee: analysis.whatYouSee,
-        aiGeneratedLikelihood: analysis.aiGeneratedLikelihood
-      }
+        reasoning: analysis.reasoning,
+        aiGeneratedLikelihood: analysis.aiGeneratedLikelihood,
+      },
     };
 
     console.log('Sending response:', response);
+
+    // Clean up the saved files after successful analysis
+    safeRemoveDirectory(sessionDir);
+
     return res.status(200).json(response);
   } catch (error) {
     console.error('Error in recording controller:', error);
 
+    // Clean up the current session directory if it was created
+    if (sessionDir) {
+      safeRemoveDirectory(sessionDir);
+    }
+
     const errorResponse = {
       success: false,
-      error: error instanceof Error ? error.message : 'Internal server error'
+      error: error instanceof Error ? error.message : 'Internal server error',
     };
 
     console.log('Sending error response:', errorResponse);
