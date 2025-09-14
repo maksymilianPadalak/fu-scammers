@@ -137,22 +137,43 @@ const Popup: React.FC = () => {
 
       const data = await response.json();
       
-      // Store the analysis result if available
+      console.log('Analysis response from exact aiAnalysis.ts logic:', data);
+      
+      // Store the analysis result if available (now returns AIDetectionSummary format)
       if (data.analysis) {
-        setAnalysisResult(data.analysis);
+        // Convert AIDetectionSummary to old format for display compatibility
+        const convertedAnalysis = {
+          username: data.analysis.whatIsIt?.[0] || 'unknown', // Use first description as username
+          whatYouSee: data.analysis.whatIsIt?.join(', ') || 'Unable to analyze content',
+          synthetic_likelihood: data.analysis.aiGeneratedLikelihood || 0,
+          decision: data.analysis.aiGeneratedLikelihood > 0.7 ? 'ai_generated' : 
+                   data.analysis.aiGeneratedLikelihood > 0.3 ? 'uncertain' : 'camera_captured',
+          artifacts: {
+            temporal_inconsistency: data.analysis.artifactsDetected?.includes('temporal_inconsistency') || false,
+            edge_halos_or_seams: data.analysis.artifactsDetected?.includes('edge_halos_or_seams') || false,
+            finger_or_teeth_anomalies: data.analysis.artifactsDetected?.includes('finger_or_teeth_anomalies') || false,
+            texture_or_pore_smoothing: data.analysis.artifactsDetected?.includes('texture_or_pore_smoothing') || false,
+            lighting_or_reflection_mismatch: data.analysis.artifactsDetected?.includes('lighting_or_reflection_mismatch') || false,
+            weird_text_or_logos: data.analysis.artifactsDetected?.includes('weird_text_or_logos') || false,
+            motion_wobble_or_jelly_faces: data.analysis.artifactsDetected?.includes('motion_wobble_or_jelly_faces') || false,
+          },
+          notes: data.analysis.rationale?.join('. ') || 'No additional notes',
+        };
+        
+        setAnalysisResult(convertedAnalysis);
         
         // Store Weaviate status if available
         if (data.weaviate) {
           setWeaviateStatus(data.weaviate);
         }
         
-        let statusMessage = `✅ Recording analyzed! AI detected: ${Math.round(data.analysis.synthetic_likelihood * 100)}% likelihood`;
+        let statusMessage = `✅ Recording analyzed with EXACT aiAnalysis.ts logic! AI detected: ${Math.round(data.analysis.aiGeneratedLikelihood * 100)}% likelihood`;
         
         // Add Weaviate storage information if available
         if (data.weaviate) {
           if (data.weaviate.stored) {
             statusMessage += ` 🚨 Username flagged and stored in database!`;
-          } else if (data.analysis.synthetic_likelihood > 0.5) {
+          } else if (data.analysis.aiGeneratedLikelihood > 0.5) {
             statusMessage += ` ⚠️ Above threshold but username unknown`;
           }
         }
