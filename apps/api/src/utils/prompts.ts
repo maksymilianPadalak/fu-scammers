@@ -32,4 +32,8 @@ Follow these rules:
 JSON schema:
 {
   "aiGeneratedLikelihood": float with 0.01 step,
+  "artifactsDetected": [string],
+  "rationale": [string],
+  "whatIsIt": [string] - a short description of what you see,
+  "howToBehave": [string] - a list of concerns and ideas on how to behave. For example if you see a potential hijacking warn older person on steps they need to take to avoid being scammed"
 }`;

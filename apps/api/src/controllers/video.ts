@@ -2,11 +2,7 @@ import type { Request, Response } from 'express';
 import { processVideoUpload } from '../services/video';
 import { extractAndAnalyze } from '../services/frameAnalysis';
 import { parseAIDetectionOutput } from '../types/ai';
-import {
-  broadcastAnalysisStatus,
-  stopFrameStreaming,
-  triggerFrameStreaming,
-} from '../ws';
+import { triggerFrameStreaming, broadcastAnalysisStatus, stopFrameStreaming } from '../ws';
 import fs from 'fs';
 import path from 'path';
 
@@ -52,10 +48,7 @@ export const uploadVideo = async (req: VideoUploadRequest, res: Response) => {
     // Step 1.5: Trigger frame streaming immediately for loading animation
     console.log('🎥 Starting frame streaming for live preview...');
     triggerFrameStreaming(req.file.path);
-    broadcastAnalysisStatus(
-      'starting',
-      'Analyzing video for AI-generated content...'
-    );
+    broadcastAnalysisStatus('starting', 'Analyzing video for AI-generated content...');
 
     // Step 2: Extract first frame and analyze for AI-generated content
     console.log('🔍 Starting AI-generated content detection...');
@@ -63,16 +56,13 @@ export const uploadVideo = async (req: VideoUploadRequest, res: Response) => {
     const frameAnalysis = await extractAndAnalyze(req.file.path);
 
     if (!frameAnalysis.success || !frameAnalysis.analysis) {
-      broadcastAnalysisStatus(
-        'error',
-        frameAnalysis.error || 'AI analysis failed'
-      );
-
+      broadcastAnalysisStatus('error', frameAnalysis.error || 'AI analysis failed');
+      
       // Clean up files even on analysis failure
       stopFrameStreaming(req.file.path);
       await cleanupVideoFile(req.file.path);
       await cleanupExtractedFrames(req.file.path);
-
+      
       return res.status(502).json({
         success: false,
         error: frameAnalysis.error || 'AI analysis failed',
@@ -92,10 +82,10 @@ export const uploadVideo = async (req: VideoUploadRequest, res: Response) => {
     );
 
     broadcastAnalysisStatus('completed', 'Analysis completed successfully!');
-
+    
     // Stop frame streaming since analysis is complete
     stopFrameStreaming(req.file.path);
-
+    
     res.status(200).json(responseData);
     console.log('✅ Video upload and analysis completed successfully');
 
@@ -104,7 +94,7 @@ export const uploadVideo = async (req: VideoUploadRequest, res: Response) => {
     await cleanupExtractedFrames(req.file.path);
   } catch (error) {
     console.error('❌ Error in video upload controller:', error);
-
+    
     // Clean up files even on server error
     if (req.file) {
       try {
@@ -115,7 +105,7 @@ export const uploadVideo = async (req: VideoUploadRequest, res: Response) => {
         console.error('⚠️ Failed to cleanup files after error:', cleanupError);
       }
     }
-
+    
     return res.status(500).json({
       success: false,
       error: 'Internal server error during video upload',
@@ -199,16 +189,16 @@ const cleanupVideoFile = async (filePath: string): Promise<void> => {
 const cleanupExtractedFrames = async (videoPath: string): Promise<void> => {
   try {
     const videoDir = path.dirname(videoPath);
-
+    
     // Find and delete frame folders (they have pattern like frames-1234567-abc123)
     const items = fs.readdirSync(videoDir);
     let deletedFolders = 0;
     let deletedFiles = 0;
-
+    
     for (const item of items) {
       const itemPath = path.join(videoDir, item);
       const stat = fs.lstatSync(itemPath);
-
+      
       // Delete frame folders created by extractFrames
       if (stat.isDirectory() && item.startsWith('frames-')) {
         try {
@@ -227,11 +217,7 @@ const cleanupExtractedFrames = async (videoPath: string): Promise<void> => {
         }
       }
       // Also clean up any loose frame files that might exist
-      else if (
-        stat.isFile() &&
-        (item.startsWith('frame-') || item.includes('frame_')) &&
-        (item.endsWith('.jpg') || item.endsWith('.png'))
-      ) {
+      else if (stat.isFile() && (item.startsWith('frame-') || item.includes('frame_')) && (item.endsWith('.jpg') || item.endsWith('.png'))) {
         try {
           fs.unlinkSync(itemPath);
           deletedFiles++;
@@ -240,13 +226,11 @@ const cleanupExtractedFrames = async (videoPath: string): Promise<void> => {
         }
       }
     }
-
+    
     if (deletedFolders > 0 || deletedFiles > 0) {
-      console.log(
-        `Cleaned up ${deletedFolders} frame folders and ${deletedFiles} frame files`
-      );
+      console.log(`🧡 Cleaned up ${deletedFolders} frame folders and ${deletedFiles} frame files`);
     }
   } catch (error) {
-    console.error('Failed to cleanup extracted frames:', error);
+    console.error('⚠️ Failed to cleanup extracted frames:', error);
   }
 };
