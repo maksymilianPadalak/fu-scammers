@@ -17,13 +17,12 @@ const App = () => (
       <Toaster />
       <Sonner />
       <BrowserRouter>
-        <Navigation />
         <Routes>
-          <Route path="/" element={<Index />} />
-          <Route path="/fine-tune" element={<FineTune />} />
-          <Route path="/scammers" element={<PotentialScammers />} />
+          <Route path="/" element={<><Navigation /><Index /></>} />
+          <Route path="/fine-tune" element={<><Navigation /><FineTune /></>} />
+          <Route path="/scammers" element={<><Navigation /><PotentialScammers /></>} />
           {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
-          <Route path="*" element={<NotFound />} />
+          <Route path="*" element={<><Navigation /><NotFound /></>} />
         </Routes>
       </BrowserRouter>
     </TooltipProvider>

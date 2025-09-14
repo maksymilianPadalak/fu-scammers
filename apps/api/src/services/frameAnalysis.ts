@@ -10,6 +10,7 @@ export interface FrameAnalysisResult {
   frameExtracted: boolean;
   frames?: string[];
   analysis?: string;
+  transcription?: string;
   error?: string;
 }
 
@@ -41,13 +42,14 @@ export const extractAndAnalyze = async (
       ? frames
       : Array.from({ length: MAX_FRAMES }, (_, i) => frames[Math.floor((i * frames.length) / MAX_FRAMES)]);
 
-    const analysis = await analyzeFrameWithOpenAI(sampledFrames, audioPath);
+    const result = await analyzeFrameWithOpenAI(sampledFrames, audioPath);
 
     return {
       success: true,
       frameExtracted: true,
       frames,
-      analysis,
+      analysis: result.analysis,
+      transcription: result.transcription,
     };
   } catch (error) {
     return {

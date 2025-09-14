@@ -176,6 +176,24 @@ export const AIDetectionResults: React.FC<AIDetectionResultsProps> = ({
         </CardContent>
       </Card>
 
+      {/* LOW RISK DISCLAIMER */}
+      {likelihood < 50 && (
+        <Card className="border-4 border-orange-500 shadow-[6px_6px_0px_0px_rgba(249,115,22,1)] bg-orange-50">
+          <CardHeader className="bg-orange-500 border-b-4 border-black">
+            <CardTitle className="text-lg md:text-xl font-black text-white flex items-center gap-2">
+              ⚠️ IMPORTANT DISCLAIMER
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="p-4 md:p-6">
+            <div className="bg-white border-2 border-orange-500 p-4 shadow-[3px_3px_0px_0px_rgba(249,115,22,1)]">
+              <p className="font-bold text-sm md:text-base leading-relaxed text-gray-800">
+                Our checks are great with checking content generated from pictures even with latest VEO 3 model, however avatars created from scratch can fool our checks. Always double check your data, and contact police if you suspect scam. We are working on improving our systems to catch even most realistic videos!
+              </p>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
       {/* FOOTER STAMP */}
       <div className="text-center p-3 md:p-4 border-4 border-black bg-black text-white shadow-[4px_4px_0px_0px_rgba(0,0,0,1)]">
         <p className="font-black text-xs md:text-sm tracking-widest">

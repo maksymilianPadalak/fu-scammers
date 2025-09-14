@@ -1,5 +1,4 @@
 import React, { useState, useEffect } from 'react';
-import Navigation from '@/components/Navigation';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -15,6 +14,7 @@ interface ScammerData {
   detectedAt: string;
   source: string;
   createdAt: string;
+  transcription?: string;
 }
 
 const PotentialScammers = () => {
@@ -70,7 +70,6 @@ const PotentialScammers = () => {
   if (loading) {
     return (
       <div className="min-h-screen bg-background">
-        <Navigation />
         <div className="container mx-auto px-4 py-8">
           <div className="flex items-center justify-center min-h-[400px]">
             <div className="text-center">
@@ -85,8 +84,6 @@ const PotentialScammers = () => {
 
   return (
     <div className="min-h-screen bg-background">
-      <Navigation />
-      
       <div className="container mx-auto px-4 py-8">
         <div className="max-w-6xl mx-auto">
           
@@ -200,6 +197,19 @@ const PotentialScammers = () => {
                               </p>
                             </div>
                           </div>
+
+                          {scammer.transcription && (
+                            <div>
+                              <h4 className="font-mono font-black text-sm mb-2 flex items-center gap-2">
+                                🎤 AUDIO TRANSCRIPTION
+                              </h4>
+                              <div className="bg-purple-50 border-2 border-purple-500 p-3 shadow-brutal">
+                                <p className="font-mono text-sm italic">
+                                  "{scammer.transcription}"
+                                </p>
+                              </div>
+                            </div>
+                          )}
                         </div>
                         
                         {/* Technical Details */}

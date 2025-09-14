@@ -16,7 +16,7 @@ const IMAGE_DETAIL = 'high' as const;
 export async function analyzeFrameWithOpenAI(
   framePathOrPaths: string | string[],
   audioPath: string
-): Promise<string> {
+): Promise<{ analysis: string; transcription: string }> {
   const paths = Array.isArray(framePathOrPaths)
     ? framePathOrPaths
     : [framePathOrPaths];
@@ -68,5 +68,8 @@ export async function analyzeFrameWithOpenAI(
     ],
   });
 
-  return resp.output_text;
+  return {
+    analysis: resp.output_text,
+    transcription: audioResponse.text
+  };
 }

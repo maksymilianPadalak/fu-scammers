@@ -46,6 +46,7 @@ export const storeScammerData = async (data: {
   sessionId: string;
   timestamp: string;
   source: string;
+  transcription?: string;
 }): Promise<{ success: boolean; error?: string }> => {
   try {
     const weaviateClient = await getClient();
@@ -70,6 +71,7 @@ export const storeScammerData = async (data: {
       detectedAt: data.timestamp,
       source: data.source,
       flagged: true,
+      transcription: data.transcription || '',
     });
 
     console.log('Successfully stored scammer data in Weaviate:', {
@@ -200,6 +202,11 @@ export const ensureVideosClass = async (): Promise<void> => {
             name: 'flagged',
             dataType: 'boolean',
             description: 'Whether this content was flagged as potentially AI-generated'
+          },
+          {
+            name: 'transcription',
+            dataType: 'text',
+            description: 'Audio transcription from the video'
           }
         ]
       });
@@ -245,7 +252,8 @@ export const getPotentialScammers = async (): Promise<{
       sessionId: obj.properties.sessionId,
       detectedAt: obj.properties.detectedAt,
       source: obj.properties.source,
-      createdAt: obj.metadata?.creationTime || new Date().toISOString()
+      createdAt: obj.metadata?.creationTime || new Date().toISOString(),
+      transcription: obj.properties.transcription || ''
     }));
 
     return { 

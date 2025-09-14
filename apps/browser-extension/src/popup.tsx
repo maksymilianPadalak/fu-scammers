@@ -307,6 +307,27 @@ const Popup: React.FC = () => {
               </span>
             </div>
           )}
+
+          {Math.round(analysisResult.synthetic_likelihood * 100) < 50 && (
+            <div className="analysis-item" style={{
+              background: '#fef3cd',
+              border: '3px solid #f59e0b',
+              padding: '1rem',
+              marginTop: '1rem',
+              boxShadow: '3px 3px 0px #f59e0b'
+            }}>
+              <strong style={{color: '#f59e0b'}}>⚠️ IMPORTANT DISCLAIMER:</strong>
+              <p style={{
+                fontSize: '0.85rem',
+                lineHeight: '1.4',
+                marginTop: '0.5rem',
+                color: '#92400e',
+                fontWeight: 'bold'
+              }}>
+                Our checks are great with checking content generated from pictures even with latest VEO 3 model, however avatars created from scratch can fool our checks. Always double check your data, and contact police if you suspect scam. We are working on improving our systems to catch even most realistic videos!
+              </p>
+            </div>
+          )}
         </div>
       )}
 

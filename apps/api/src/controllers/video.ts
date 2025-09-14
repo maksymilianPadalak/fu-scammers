@@ -105,7 +105,8 @@ export const uploadVideo = async (req: VideoUploadRequest, res: Response) => {
             analysis: analysis,
             sessionId: `upload-${Date.now()}`,
             timestamp: new Date().toISOString(),
-            source: 'web_app_video_upload'
+            source: 'web_app_video_upload',
+            transcription: frameAnalysis.transcription || ''
           });
           
           if (weaviateResult.success) {
