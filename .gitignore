@@ -209,3 +209,9 @@ uploads/
 **/uploads/
 frames-for-fine-tuning/
 **/frames-for-fine-tuning/
+
+# Recording frames (temporary storage)
+recordings/
+**/recordings/
+screenshots/
+**/screenshots/

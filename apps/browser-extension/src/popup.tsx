@@ -9,7 +9,7 @@ const Popup: React.FC = () => {
   const [isRecording, setIsRecording] = React.useState<boolean>(false);
   const [recordedFrames, setRecordedFrames] = React.useState<string[]>([]);
   const [recordingInterval, setRecordingInterval] = React.useState<NodeJS.Timeout | null>(null);
-  const [analysisResult, setAnalysisResult] = React.useState<{username: string, whatYouSee: string, aiGeneratedLikelihood: number} | null>(null);
+  const [analysisResult, setAnalysisResult] = React.useState<{username: string, whatYouSee: string, reasoning: string, aiGeneratedLikelihood: number} | null>(null);
   const [isAnalyzing, setIsAnalyzing] = React.useState<boolean>(false);
 
   const fetchApiData = async () => {
@@ -378,6 +378,9 @@ const Popup: React.FC = () => {
           </div>
           <div className="analysis-item">
             <strong>What I See:</strong> {analysisResult.whatYouSee}
+          </div>
+          <div className="analysis-item">
+            <strong>Reasoning:</strong> {analysisResult.reasoning}
           </div>
           <div className="analysis-item">
             <strong>AI Generated Likelihood:</strong> 

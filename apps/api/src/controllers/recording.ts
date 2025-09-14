@@ -22,19 +22,22 @@ Look for signs of AI generation like:
 - Watermarks from AI tools
 - Unusual visual artifacts
 
-Be conservative in your assessment.`;
-
-async function analyzeFramesWithOpenAI(frames: string[]): Promise<{username: string, whatYouSee: string, aiGeneratedLikelihood: number}> {
+async function analyzeFramesWithOpenAI(frames: string[]): Promise<{
+  username: string;
+  whatYouSee: string;
+  reasoning: string;
+  aiGeneratedLikelihood: number;
+}> {
   try {
     // Take up to 3 frames for analysis to avoid token limits
     const framesToAnalyze = frames.slice(0, 3);
-    
+
     const imageContent = framesToAnalyze.map(frameBase64 => ({
       type: 'image_url' as const,
       image_url: {
         url: frameBase64,
-        detail: 'high' as const
-      }
+        detail: 'high' as const,
+      },
     }));
 
     const response = await openai.chat.completions.create({
@@ -42,18 +45,20 @@ async function analyzeFramesWithOpenAI(frames: string[]): Promise<{username: str
       messages: [
         {
           role: 'system',
-          content: RECORDING_ANALYSIS_PROMPT
+          content: RECORDING_ANALYSIS_PROMPT,
         },
         {
           role: 'user',
           content: [
-            { type: 'text', text: `Please analyze these ${framesToAnalyze.length} screenshot frames:` },
-            ...imageContent
-          ]
-        }
+            {
+              type: 'text',
+              text: `Please analyze these ${framesToAnalyze.length} screenshot frames:`,
+            },
+            ...imageContent,
+          ],
+        },
       ],
-      max_tokens: 1000,
-      temperature: 0.1
+      response_format: { type: 'json_object' },
     });
 
     const analysisText = response.choices[0]?.message?.content;
@@ -61,13 +66,33 @@ async function analyzeFramesWithOpenAI(frames: string[]): Promise<{username: str
       throw new Error('No analysis received from OpenAI');
     }
 
+    console.log('OpenAI raw response:', analysisText);
+
+    // Try to extract JSON from the response (sometimes it's wrapped in markdown)
+    let cleanedText = analysisText.trim();
+
+    // Remove markdown code blocks if present
+    if (cleanedText.startsWith('```json')) {
+      cleanedText = cleanedText
+        .replace(/^```json\s*/, '')
+        .replace(/\s*```$/, '');
+    } else if (cleanedText.startsWith('```')) {
+      cleanedText = cleanedText.replace(/^```\s*/, '').replace(/\s*```$/, '');
+    }
+
     // Parse the JSON response
     try {
-      const analysis = JSON.parse(analysisText);
+      const analysis = JSON.parse(cleanedText);
+      console.log('Parsed analysis:', analysis);
+
       return {
         username: analysis.username || 'unknown',
         whatYouSee: analysis.whatYouSee || 'Unable to analyze content',
-        aiGeneratedLikelihood: Math.max(0, Math.min(1, analysis.aiGeneratedLikelihood || 0))
+        reasoning: analysis.reasoning || 'No reasoning provided',
+        aiGeneratedLikelihood: Math.max(
+          0,
+          Math.min(1, parseFloat(analysis.aiGeneratedLikelihood) || 0)
+        ),
       };
     } catch (parseError) {
       console.error('Failed to parse OpenAI response as JSON:', analysisText);
