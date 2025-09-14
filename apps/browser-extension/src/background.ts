@@ -19,15 +19,14 @@ chrome.action.onClicked.addListener((tab) => {
   console.log('Extension icon clicked for tab:', tab.url);
 });
 
-// Listen for messages from content scripts or popup
+// Listen for messages from popup
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   console.log('Background received message:', message);
   
-  // Example: Handle different message types
   if (message.type === 'GET_SETTINGS') {
     chrome.storage.sync.get(['extensionEnabled', 'apiUrl'], (result) => {
       sendResponse(result);
     });
-    return true; // Keep message channel open for async response
+    return true;
   }
 });

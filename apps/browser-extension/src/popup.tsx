@@ -5,6 +5,10 @@ import './popup.css';
 const Popup: React.FC = () => {
   const [status, setStatus] = React.useState<string>('Ready');
   const [isLoading, setIsLoading] = React.useState<boolean>(false);
+  const [screenshot, setScreenshot] = React.useState<string | null>(null);
+  const [isRecording, setIsRecording] = React.useState<boolean>(false);
+  const [recordedFrames, setRecordedFrames] = React.useState<string[]>([]);
+  const [recordingInterval, setRecordingInterval] = React.useState<NodeJS.Timeout | null>(null);
 
   const fetchApiData = async () => {
     try {
@@ -50,6 +54,203 @@ const Popup: React.FC = () => {
     }
   };
 
+  const captureScreenshot = async () => {
+    try {
+      setIsLoading(true);
+      setStatus('Capturing screenshot...');
+      
+      const [tab] = await chrome.tabs.query({
+        active: true,
+        currentWindow: true,
+      });
+
+      if (!tab.id) {
+        throw new Error('No active tab found');
+      }
+
+      // Capture visible tab content
+      const dataUrl = await chrome.tabs.captureVisibleTab(tab.windowId, {
+        format: 'png',
+        quality: 90
+      });
+
+      setScreenshot(dataUrl);
+      setStatus('📸 Screenshot captured! You can now send it to your API.');
+      
+    } catch (error) {
+      setStatus(
+        `Error: ${error instanceof Error ? error.message : 'Unknown error'}`
+      );
+      console.error('Screenshot error:', error);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const sendScreenshotToApi = async () => {
+    if (!screenshot) {
+      setStatus('No screenshot to send. Please capture one first.');
+      return;
+    }
+
+    try {
+      setIsLoading(true);
+      setStatus('Sending screenshot to API...');
+
+      const response = await fetch('http://localhost:3001/api/screenshot', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          image: screenshot,
+          timestamp: new Date().toISOString(),
+          source: 'browser_extension'
+        })
+      });
+
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+
+      const data = await response.json();
+      setStatus(`✅ Screenshot sent to API successfully! Response: ${JSON.stringify(data)}`);
+    } catch (error) {
+      setStatus(
+        `Error: ${error instanceof Error ? error.message : 'Unknown error'}`
+      );
+      console.error('API send error:', error);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const startScreenRecording = async () => {
+    try {
+      setIsLoading(true);
+      setStatus('Starting screen recording...');
+      
+      const [tab] = await chrome.tabs.query({
+        active: true,
+        currentWindow: true,
+      });
+
+      if (!tab.id) {
+        throw new Error('No active tab found');
+      }
+
+      // Clear any existing frames
+      setRecordedFrames([]);
+      setIsRecording(true);
+      
+      // Capture first frame immediately
+      const firstFrame = await chrome.tabs.captureVisibleTab(tab.windowId, {
+        format: 'png',
+        quality: 90
+      });
+      setRecordedFrames([firstFrame]);
+      
+      // Set up interval to capture frames at 2 FPS (every 500ms)
+      const interval = setInterval(async () => {
+        try {
+          const frameData = await chrome.tabs.captureVisibleTab(tab.windowId, {
+            format: 'png',
+            quality: 90
+          });
+          
+          setRecordedFrames(prev => [...prev, frameData]);
+        } catch (error) {
+          console.error('Error capturing frame:', error);
+        }
+      }, 500); // 2 FPS = 500ms interval
+      
+      setRecordingInterval(interval);
+      setStatus('🎬 Recording started! Capturing at 2 FPS...');
+      
+    } catch (error) {
+      setStatus(
+        `Error: ${error instanceof Error ? error.message : 'Unknown error'}`
+      );
+      console.error('Recording start error:', error);
+      setIsRecording(false);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const stopScreenRecording = () => {
+    try {
+      setIsLoading(true);
+      setStatus('Stopping screen recording...');
+      
+      if (recordingInterval) {
+        clearInterval(recordingInterval);
+        setRecordingInterval(null);
+      }
+      
+      setIsRecording(false);
+      setStatus(`🎬 Recording stopped! Captured ${recordedFrames.length} frames.`);
+      
+    } catch (error) {
+      setStatus(
+        `Error: ${error instanceof Error ? error.message : 'Unknown error'}`
+      );
+      console.error('Recording stop error:', error);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const sendRecordingToApi = async () => {
+    if (recordedFrames.length === 0) {
+      setStatus('No recording to send. Please record something first.');
+      return;
+    }
+
+    try {
+      setIsLoading(true);
+      setStatus('Sending recording to API...');
+
+      const response = await fetch('http://localhost:3001/api/recording', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          frames: recordedFrames,
+          frameCount: recordedFrames.length,
+          fps: 2,
+          timestamp: new Date().toISOString(),
+          source: 'browser_extension'
+        })
+      });
+
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+
+      const data = await response.json();
+      setStatus(`✅ Recording sent to API successfully! Response: ${JSON.stringify(data)}`);
+    } catch (error) {
+      setStatus(
+        `Error: ${error instanceof Error ? error.message : 'Unknown error'}`
+      );
+      console.error('API send error:', error);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  // Cleanup interval on component unmount
+  React.useEffect(() => {
+    return () => {
+      if (recordingInterval) {
+        clearInterval(recordingInterval);
+      }
+    };
+  }, [recordingInterval]);
+
+
   return (
     <div className="popup-container">
       <div className="header">
@@ -67,6 +268,91 @@ const Popup: React.FC = () => {
       >
         Make Paragraphs Pink 💖
       </button>
+
+      <button
+        className="button"
+        onClick={captureScreenshot}
+        disabled={isLoading || isRecording}
+      >
+        Capture Screenshot 📸
+      </button>
+
+      {!isRecording ? (
+        <button
+          className="button"
+          onClick={startScreenRecording}
+          disabled={isLoading}
+        >
+          Start Recording 🎬 (2 FPS)
+        </button>
+      ) : (
+        <button
+          className="button recording-stop"
+          onClick={stopScreenRecording}
+          disabled={isLoading}
+        >
+          Stop Recording ⏹️ ({recordedFrames.length} frames)
+        </button>
+      )}
+
+      {screenshot && (
+        <button
+          className="button"
+          onClick={sendScreenshotToApi}
+          disabled={isLoading}
+        >
+          Send Screenshot to API 🚀
+        </button>
+      )}
+
+      {recordedFrames.length > 0 && !isRecording && (
+        <button
+          className="button"
+          onClick={sendRecordingToApi}
+          disabled={isLoading}
+        >
+          Send Recording to API 🎥 ({recordedFrames.length} frames)
+        </button>
+      )}
+
+      {recordedFrames.length > 0 && (
+        <div className="recording-preview">
+          <h4>Recording Preview ({recordedFrames.length} frames):</h4>
+          <div className="frames-grid">
+            {recordedFrames.slice(-12).map((frame, index) => (
+              <img 
+                key={`${recordedFrames.length - 12 + index}`}
+                src={frame} 
+                alt={`Frame ${recordedFrames.length - 12 + index + 1}`}
+                className="frame-thumbnail"
+                title={`Frame ${recordedFrames.length - 12 + index + 1}`}
+              />
+            ))}
+          </div>
+          {recordedFrames.length > 12 && (
+            <p style={{ fontSize: '12px', color: '#666', margin: '8px 0 0 0' }}>
+              Showing last 12 frames
+            </p>
+          )}
+        </div>
+      )}
+
+      {screenshot && (
+        <div className="screenshot-preview">
+          <h4>Screenshot Preview:</h4>
+          <img 
+            src={screenshot} 
+            alt="Captured screenshot" 
+            style={{
+              maxWidth: '100%',
+              maxHeight: '200px',
+              border: '2px solid #667eea',
+              borderRadius: '8px',
+              marginTop: '10px'
+            }}
+          />
+        </div>
+      )}
 
       <div className="status">{status}</div>
     </div>

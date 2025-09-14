@@ -6,6 +6,8 @@ import { healthRouter } from './routes/health'
 import { itemsRouter } from './routes/items'
 import { analyzeRouter } from './routes/analyze'
 import { videoRouter } from './routes/video'
+import { screenshotRouter } from './routes/screenshot'
+import { recordingRouter } from './routes/recording'
 // import { weaviateRouter } from './routes/weaviate'
 import { fineTuneRouter } from './routes/fineTune'
 import { setupWebSocket } from './ws'
@@ -30,6 +32,8 @@ app.use('/api', healthRouter)
 app.use('/api', itemsRouter)
 app.use('/api', analyzeRouter)
 app.use('/api', videoRouter)
+app.use('/api', screenshotRouter)
+app.use('/api', recordingRouter)
 // app.use('/api', weaviateRouter)
 app.use('/api', fineTuneRouter)
 // Create HTTP server and start servers
