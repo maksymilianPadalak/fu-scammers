@@ -60,8 +60,8 @@ export async function extractFramesForFineTuning(
   await new Promise<void>((resolve, reject) => {
     let cmd = ffmpeg(videoPath)
       .fps(fps)
-      .size(size) // -1:1080 preserves aspect ratio
       .outputOptions([
+        '-vf', `scale=${size}`, // Use scale filter for size
         '-q:v', '2' // High quality (1-31, lower = better quality)
       ])
       .output(outputPattern);

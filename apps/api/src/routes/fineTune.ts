@@ -2,7 +2,7 @@ import { Router } from 'express'
 import multer from 'multer'
 import path from 'path'
 import fs from 'fs'
-import { processFineTuneVideo } from '../controllers/fineTune'
+import { processFineTuneVideo, executeFineTune } from '../controllers/fineTune'
 
 export const fineTuneRouter = Router()
 
@@ -91,6 +91,7 @@ const handleMulterError = (error: any, req: any, res: any, next: any) => {
 
 // Routes
 fineTuneRouter.post('/fine-tune/upload-video', upload.single('video'), handleMulterError, processFineTuneVideo)
+fineTuneRouter.post('/execute-finetune', executeFineTune)
 
 // Test endpoint
 fineTuneRouter.get('/fine-tune/test', (req, res) => {

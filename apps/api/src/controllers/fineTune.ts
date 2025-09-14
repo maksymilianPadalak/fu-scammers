@@ -1,5 +1,6 @@
 import type { Request, Response } from 'express';
 import { extractFramesForFineTuning } from '../utils/fineTuneFrameExtraction';
+import { createFineTuning } from '../finetune';
 import fs from 'fs';
 import path from 'path';
 
@@ -96,6 +97,36 @@ export const processFineTuneVideo = async (
     return res.status(500).json({
       success: false,
       error: 'Internal server error during fine-tune video processing',
+      details: error instanceof Error ? error.message : 'Unknown error',
+    });
+  }
+};
+
+/**
+ * Execute the fine-tuning process
+ */
+export const executeFineTune = async (
+  req: Request,
+  res: Response
+) => {
+  console.log('🚀 Executing fine-tuning process...');
+  
+  try {
+    await createFineTuning();
+    
+    res.status(200).json({
+      success: true,
+      message: 'Fine-tuning process executed successfully',
+      timestamp: new Date().toISOString()
+    });
+    
+    console.log('✅ Fine-tuning execution completed');
+  } catch (error) {
+    console.error('❌ Error executing fine-tuning:', error);
+    
+    return res.status(500).json({
+      success: false,
+      error: 'Internal server error during fine-tuning execution',
       details: error instanceof Error ? error.message : 'Unknown error',
     });
   }
