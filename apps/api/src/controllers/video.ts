@@ -3,6 +3,7 @@ import { processVideoUpload } from '../services/video';
 import { extractAndAnalyze } from '../services/frameAnalysis';
 import { parseAIDetectionOutput } from '../types/ai';
 import { triggerFrameStreaming, broadcastAnalysisStatus, stopFrameStreaming } from '../ws';
+import { storeScammerData, ensureVideosClass } from '../services/weaviate';
 import fs from 'fs';
 import path from 'path';
 
@@ -78,6 +79,47 @@ export const uploadVideo = async (req: VideoUploadRequest, res: Response) => {
     // Step 3: Parse and structure the AI analysis results
     console.log('📊 Parsing AI analysis results...');
     const parsedAnalysis = parseAIDetectionOutput(frameAnalysis.analysis);
+
+    // Step 3.5: Store in Weaviate if AI score > 50% and scammer info provided
+    const scammerInfo = additionalInfo;
+    if (parsedAnalysis.data && scammerInfo) {
+      // Handle both AIDetectionSummary and AIDetectionFrame[] formats
+      const data = parsedAnalysis.data;
+      const aiLikelihood = Array.isArray(data) 
+        ? (data[0]?.ai_likelihood || 0)
+        : (data.aiGeneratedLikelihood || 0);
+      
+      if (aiLikelihood > 0.5) {
+        console.log(`🚨 AI likelihood ${Math.round(aiLikelihood * 100)}% > 50%, storing scammer data in Weaviate...`);
+        
+        try {
+          await ensureVideosClass();
+          
+          const analysis = Array.isArray(data)
+            ? (data[0]?.rationale || 'No analysis available')
+            : (data.whatIsIt?.join('. ') || 'No analysis available');
+          
+          const weaviateResult = await storeScammerData({
+            scammerInfo: scammerInfo,
+            aiGeneratedLikelihood: aiLikelihood,
+            analysis: analysis,
+            sessionId: `upload-${Date.now()}`,
+            timestamp: new Date().toISOString(),
+            source: 'web_app_video_upload'
+          });
+          
+          if (weaviateResult.success) {
+            console.log('✅ Successfully stored scammer data in Weaviate');
+          } else {
+            console.error('❌ Failed to store scammer data:', weaviateResult.error);
+          }
+        } catch (weaviateError) {
+          console.error('❌ Error during Weaviate storage:', weaviateError);
+        }
+      } else {
+        console.log(`ℹ️ AI likelihood ${Math.round(aiLikelihood * 100)}% ≤ 50%, not storing in Weaviate`);
+      }
+    }
 
     // Step 4: Prepare and send successful response
     const responseData = buildSuccessResponse(

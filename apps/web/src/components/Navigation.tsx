@@ -33,6 +33,17 @@ const Navigation = () => {
             >
               Fine Tune
             </Link>
+            <Link
+              to="/scammers"
+              className={cn(
+                "text-sm font-medium transition-colors hover:text-primary font-mono font-bold",
+                isActive("/scammers") 
+                  ? "text-red-600" 
+                  : "text-muted-foreground hover:text-red-600"
+              )}
+            >
+              🚨 POTENTIAL SCAMMERS
+            </Link>
           </div>
         </div>
       </div>

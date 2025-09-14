@@ -8,6 +8,7 @@ import { analyzeRouter } from './routes/analyze'
 import { videoRouter } from './routes/video'
 import { screenshotRouter } from './routes/screenshot'
 import { recordingRouter } from './routes/recording'
+import { scammersRouter } from './routes/scammers'
 // import { weaviateRouter } from './routes/weaviate'
 import { fineTuneRouter } from './routes/fineTune'
 import { setupWebSocket } from './ws'
@@ -35,6 +36,7 @@ app.use('/api', analyzeRouter)
 app.use('/api', videoRouter)
 app.use('/api', screenshotRouter)
 app.use('/api', recordingRouter)
+app.use('/api', scammersRouter)
 // app.use('/api', weaviateRouter)
 app.use('/api', fineTuneRouter)
 // Create HTTP server and start servers
